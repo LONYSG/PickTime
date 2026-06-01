@@ -160,7 +160,7 @@ export function DateSheet({
         {/* Candidates */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-muted-foreground">시간 후보</h3>
+            <h3 className="text-sm font-bold text-muted-foreground">{readOnly ? '시간 결과' : '시간 후보'}</h3>
             {!readOnly && !adding && (
               <button
                 onClick={() => setAdding(true)}
@@ -197,8 +197,7 @@ export function DateSheet({
               </div>
             ) : (
               <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-                아직 시간 후보가 없어요.
-                {!readOnly && ' 첫 후보를 추가해 보세요!'}
+                {readOnly ? '이 날은 시간 후보가 없었어요.' : '아직 시간 후보가 없어요. 첫 후보를 추가해 보세요!'}
               </p>
             )
           )}
@@ -409,7 +408,7 @@ function CommentSection({
 
       <div className="space-y-2.5">
         {comments.length === 0 && (
-          <p className="text-sm text-muted-foreground">가볍게 의견을 남겨보세요.</p>
+          <p className="text-sm text-muted-foreground">{readOnly ? '댓글이 없어요.' : '가볍게 의견을 남겨보세요.'}</p>
         )}
         {comments.map((c) => {
           const p = c.participant_id ? participantsById.get(c.participant_id) : undefined;
