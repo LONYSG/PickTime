@@ -223,6 +223,8 @@ export default function RoomPage() {
           room={room}
           session={session}
           participants={activeParticipants}
+          candidates={data.candidates}
+          votes={data.votes}
           ranked={ranked}
         />
       </div>

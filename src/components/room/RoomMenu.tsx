@@ -43,7 +43,7 @@ import {
 import { useSessionStore } from '@/store/session';
 import { useAuth } from '@/components/auth/AuthProvider';
 import type { CandidateTally } from '@/lib/aggregate';
-import type { Participant, Room, Session } from '@/lib/types';
+import type { CandidateVote, Participant, Room, Session, TimeCandidate } from '@/lib/types';
 
 export function RoomMenu({
   open,
@@ -51,6 +51,8 @@ export function RoomMenu({
   room,
   session,
   participants,
+  candidates,
+  votes,
   ranked,
 }: {
   open: boolean;
@@ -58,6 +60,8 @@ export function RoomMenu({
   room: Room;
   session: Session | undefined;
   participants: Participant[];
+  candidates: TimeCandidate[];
+  votes: CandidateVote[];
   ranked: CandidateTally[];
 }) {
   const nav = useNavigate();
@@ -152,7 +156,13 @@ export function RoomMenu({
 
         {/* Room settings */}
         {isManager && session && (
-          <RoomSettingsForm room={room} session={session} onSaved={refreshRoom} />
+          <RoomSettingsForm
+            room={room}
+            session={session}
+            candidates={candidates}
+            votes={votes}
+            onSaved={refreshRoom}
+          />
         )}
 
         {/* My participation */}
@@ -414,16 +424,48 @@ function ParticipantRow({
 function RoomSettingsForm({
   room,
   session,
+  candidates,
+  votes,
   onSaved,
 }: {
   room: Room;
   session: Session;
+  candidates: TimeCandidate[];
+  votes: CandidateVote[];
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState(room.title);
   const [start, setStart] = useState(room.date_range_start);
   const [end, setEnd] = useState(room.date_range_end);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const datesChanged = start !== room.date_range_start || end !== room.date_range_end;
+  // Candidates that would fall outside the new range (and so be deleted).
+  const lost = candidates.filter((c) => c.date < start || c.date > end);
+  const lostIds = new Set(lost.map((c) => c.id));
+  const affectedVoters = new Set(
+    votes.filter((v) => lostIds.has(v.candidate_id)).map((v) => v.participant_id),
+  ).size;
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updateRoomSettings({
+        token: session.token,
+        title: title.trim(),
+        dateStart: start,
+        dateEnd: end,
+      });
+      onSaved();
+      toast.success('설정을 저장했어요.');
+      setConfirming(false);
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="space-y-3 border-t border-border pt-4">
@@ -446,21 +488,41 @@ function RoomSettingsForm({
         variant="outline"
         className="w-full"
         disabled={busy || !title.trim() || end < start}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await updateRoomSettings({ token: session.token, title: title.trim(), dateStart: start, dateEnd: end });
-            onSaved();
-            toast.success('설정을 저장했어요.');
-          } catch (e) {
-            toast.error(friendlyError(e));
-          } finally {
-            setBusy(false);
-          }
+        onClick={() => {
+          // If narrowing the range would delete already-voted candidates, confirm first.
+          if (datesChanged && lost.length > 0) setConfirming(true);
+          else save();
         }}
       >
         설정 저장
       </Button>
+
+      <Dialog open={confirming} onClose={() => setConfirming(false)} title="기간을 바꿀까요?">
+        <p className="text-sm text-muted-foreground">
+          새 기간을 벗어나는 <b className="text-foreground">시간 후보 {lost.length}개</b>가 삭제되고,
+          {affectedVoters > 0 && (
+            <>
+              {' '}
+              <b className="text-foreground">{affectedVoters}명</b>의 투표가 취소돼요.
+            </>
+          )}{' '}
+          되돌릴 수 없고, 해당 참가자에게 알림이 가요.
+        </p>
+        <div className="mt-3 max-h-28 overflow-y-auto rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+          {Array.from(new Set(lost.map((c) => c.date)))
+            .sort()
+            .map((d) => dayjs(d).format('M/D (ddd)'))
+            .join(', ')}
+        </div>
+        <div className="mt-5 flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setConfirming(false)}>
+            취소
+          </Button>
+          <Button variant="destructive" className="flex-1" disabled={busy} onClick={save}>
+            계속
+          </Button>
+        </div>
+      </Dialog>
     </section>
   );
 }

@@ -532,6 +532,11 @@ supabase/migrations/   SQL — run these in the Supabase SQL editor in order
   0005_write_guards...   candidate_votes.room_id (realtime scoping) + BEFORE
                          INSERT guards: block writes when room finalized or
                          actor has left/been kicked
+  0006_sessions_...      participant_sessions table (multiple concurrent
+                         sessions per participant — login on a 2nd device no
+                         longer logs out the 1st) + update_room_settings drops
+                         out-of-range candidates/votes and notifies on range
+                         change
 src/
   lib/        supabase client, types, api (RPC/query wrappers), aggregate
               (vote/all-day/불참 tallying + rankings), dayjs(KST), colors
@@ -570,8 +575,10 @@ Deviations from the "suggested schema" in Part 1 (intentional):
 
 - **No Supabase Auth.** Identity = a `participants` row + an opaque session
   token. On join/login an RPC returns a random token; only its SHA-256 hash is
-  stored in `participant_auth`. The client keeps the raw token in localStorage
-  (`useSessionStore`) and passes it to privileged RPCs.
+  stored in `participant_sessions` (multiple rows per participant — concurrent
+  sessions are allowed; migration 0006). The client keeps the raw token in
+  localStorage (`useSessionStore`) and passes it to privileged RPCs. Leave/kick/
+  PIN-reset delete that participant's session rows to force re-login.
 - **Hashing is server-side** via `pgcrypto` (`crypt`/`gen_salt('bf')`).
 - **pgcrypto lives in the `extensions` schema**, so every SECURITY DEFINER
   function declares `set search_path = public, extensions`. If you add a new

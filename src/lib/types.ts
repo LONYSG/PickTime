@@ -82,7 +82,9 @@ export type NotificationType =
   | 'candidate_edited'
   | 'finalized'
   | 'reopened'
-  | 'role_change';
+  | 'role_change'
+  | 'range_changed'
+  | 'votes_cancelled';
 
 export interface AppNotification {
   id: string;

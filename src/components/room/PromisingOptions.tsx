@@ -61,14 +61,18 @@ export function PromisingOptions({
                 o.id === finalizedId && 'ring-2 ring-amber-300',
               )}
             >
+              <span className="w-11 shrink-0 text-center leading-tight">
+                <span className="block text-sm font-bold">{d.format('M/D')}</span>
+                <span className="block text-[11px] opacity-80">{d.format('ddd')}</span>
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
                   {o.kind === 'allday' ? (
                     <span className="inline-flex items-center gap-1">
-                      {d.format('M/D (ddd)')} · <Sun className="h-3.5 w-3.5" /> 하루종일
+                      <Sun className="h-3.5 w-3.5" /> 하루종일
                     </span>
                   ) : (
-                    `${d.format('M/D (ddd)')} · ${fmtRange(o.start_time!, o.end_time!)}`
+                    fmtRange(o.start_time!, o.end_time!)
                   )}
                   {o.unavailableCount > 0 && (
                     <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">

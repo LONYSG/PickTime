@@ -11,6 +11,8 @@ import {
   RotateCcw,
   ShieldCheck,
   Bell,
+  CalendarRange,
+  XCircle,
 } from 'lucide-react';
 import type { AppNotification, NotificationType } from '@/lib/types';
 
@@ -20,6 +22,8 @@ const META: Record<NotificationType, { icon: typeof Bell; label: string }> = {
   finalized: { icon: CheckCircle2, label: '일정 확정' },
   reopened: { icon: RotateCcw, label: '방 재오픈' },
   role_change: { icon: ShieldCheck, label: '권한 변경' },
+  range_changed: { icon: CalendarRange, label: '기간 변경' },
+  votes_cancelled: { icon: XCircle, label: '내 투표 취소됨' },
 };
 
 export function NotificationCenter({
