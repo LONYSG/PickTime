@@ -3,15 +3,12 @@
 const API_KEY = import.meta.env.VITE_HOLIDAY_API_KEY as string;
 
 async function fetchYearHolidays(year: number): Promise<Set<string>> {
-  const url = new URL(
-    'https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo',
-  );
-  url.searchParams.set('serviceKey', API_KEY);
-  url.searchParams.set('solYear', String(year));
-  url.searchParams.set('numOfRows', '50');
-  url.searchParams.set('_type', 'json');
+  // serviceKey must NOT be URL-encoded — append raw to avoid 403
+  const url =
+    `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo` +
+    `?serviceKey=${API_KEY}&solYear=${year}&numOfRows=50&_type=json`;
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url);
   const json = await res.json();
   const raw = json.response?.body?.items?.item;
   if (!raw) return new Set();
