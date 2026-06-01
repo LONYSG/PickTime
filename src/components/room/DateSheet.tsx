@@ -272,12 +272,9 @@ export function DateSheet({
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-center pl-1">
-                    <span className="text-xl font-extrabold leading-none text-primary">
-                      {t.total}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">표</span>
-                  </div>
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
+                    {t.total}표
+                  </span>
                 </div>
 
                 {/* owner/admin controls */}
