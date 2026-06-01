@@ -14,11 +14,13 @@ export function PromisingOptions({
   options,
   participantsById,
   finalizedId,
+  finalizedIds,
   onPick,
 }: {
   options: PromisingOption[];
   participantsById: Map<string, Participant>;
   finalizedId: string | null;
+  finalizedIds?: string[];
   onPick: (date: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -58,7 +60,7 @@ export function PromisingOptions({
               onClick={() => onPick(o.date)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-2xl bg-white/15 p-3 text-left backdrop-blur-sm active:scale-[0.99]',
-                o.id === finalizedId && 'ring-2 ring-amber-300',
+                (finalizedIds ? finalizedIds.includes(o.id) : o.id === finalizedId) && 'ring-2 ring-amber-300',
               )}
             >
               <span className="w-11 shrink-0 text-center leading-tight">

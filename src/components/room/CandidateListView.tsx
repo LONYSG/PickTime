@@ -152,7 +152,9 @@ export function CandidateListView({
 
         const t = row.tally;
         const voted = !!(session && t.explicitVoterIds.includes(session.participantId));
-        const isFinal = room.finalized_candidate_id === t.candidate.id;
+        const isFinal = room.finalized_options?.length
+          ? room.finalized_options.some((o) => o.candidate_id === t.candidate.id)
+          : room.finalized_candidate_id === t.candidate.id;
         const supporters = t.supporterIds
           .map((id) => participantsById.get(id))
           .filter(Boolean) as Participant[];

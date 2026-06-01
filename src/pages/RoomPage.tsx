@@ -181,6 +181,7 @@ export default function RoomPage() {
               options={promising}
               participantsById={participantsById}
               finalizedId={room.finalized_candidate_id}
+              finalizedIds={room.finalized_options?.filter(o => o.candidate_id).map(o => o.candidate_id!)}
               onPick={setPickedDate}
             />
           )}

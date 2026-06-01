@@ -202,7 +202,9 @@ export function DateSheet({
             const voted = !!(session && t.explicitVoterIds.includes(session.participantId));
             const isOwner = !!(session && t.candidate.created_by === session.participantId);
             const canDelete = !!(session && (session.role !== 'participant' || isOwner));
-            const isFinal = room.finalized_candidate_id === t.candidate.id;
+            const isFinal = room.finalized_options?.length
+              ? room.finalized_options.some((o) => o.candidate_id === t.candidate.id)
+              : room.finalized_candidate_id === t.candidate.id;
             const supporters = t.supporterIds
               .map((id) => participantsById.get(id))
               .filter(Boolean) as Participant[];
