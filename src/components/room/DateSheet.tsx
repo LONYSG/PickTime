@@ -80,9 +80,10 @@ export function DateSheet({
   const meUnavailableAll =
     !!session && participantsById.get(session.participantId)?.status === 'unavailable';
 
+  const getHoliday = useHolidays(date ? dayjs(date).year() : dayjs().year());
+
   if (!date) return null;
   const d = dayjs(date);
-  const getHoliday = useHolidays(d.year());
   const holidayName = getHoliday(date);
 
   return (
