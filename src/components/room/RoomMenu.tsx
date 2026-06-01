@@ -125,12 +125,14 @@ export function RoomMenu({
         {room.is_finalized ? (
           /* ── 확정 후 간소화 메뉴 ── */
           <>
-            <Button
-              className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
-              onClick={() => shareResult(room.id, room.title, resultLines)}
-            >
-              <MessageCircle className="h-5 w-5" /> 결과 카카오톡으로 공유
-            </Button>
+            <section className="space-y-2 border-b border-border pb-4">
+              <Button
+                className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
+                onClick={() => shareResult(room.id, room.title, resultLines)}
+              >
+                <MessageCircle className="h-5 w-5" /> 결과 카카오톡으로 공유
+              </Button>
+            </section>
 
             {isManager && session && (
               <Button
@@ -178,16 +180,17 @@ export function RoomMenu({
         ) : (
           /* ── 일반 메뉴 ── */
           <>
-            <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
-              <Link2 className="h-5 w-5" /> 초대 링크 복사
-            </Button>
-
-            <Button
-              className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
-              onClick={() => shareRoom(room.id, room.title)}
-            >
-              <MessageCircle className="h-5 w-5" /> 카카오톡으로 공유
-            </Button>
+            <section className="space-y-2 border-b border-border pb-4">
+              <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
+                <Link2 className="h-5 w-5" /> 초대 링크 복사
+              </Button>
+              <Button
+                className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
+                onClick={() => shareRoom(room.id, room.title)}
+              >
+                <MessageCircle className="h-5 w-5" /> 카카오톡으로 공유
+              </Button>
+            </section>
 
             {isManager && session && (
               <section className="space-y-2">
@@ -627,7 +630,7 @@ function FinalizeDialog({
   return (
     <Dialog open onClose={onClose} title="확정할 일정 선택">
       <p className="mb-3 text-xs text-muted-foreground">여러 개 선택 가능해요 (1박2일 등)</p>
-      <div className="space-y-2">
+      <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
         {options.map((opt) => {
           const checked = selected.has(opt.id);
           return (

@@ -23,12 +23,13 @@ export function shareResult(
 
   const url = `${window.location.origin}${window.location.pathname}#/room/${roomId}`;
   const firstLine = lines[0] ?? '';
-  const rest = lines.slice(1).join(' / ');
+  const extra = lines.length > 1 ? ` 외 ${lines.length - 1}개` : '';
+  const titleSuffix = firstLine ? ` — ${firstLine}${extra}` : '';
   k.Share.sendDefault({
     objectType: 'feed',
     content: {
-      title: firstLine ? `[확정] ${title} — ${firstLine}` : `[확정] ${title}`,
-      description: rest || '상세 일정을 확인하세요',
+      title: `[확정] ${title}${titleSuffix}`,
+      description: lines.length > 1 ? lines.slice(1).join(' / ') : '상세 일정을 확인하세요',
       imageUrl: 'https://lonysg.github.io/PickTime/og-card.png',
       imageWidth: 1200,
       imageHeight: 630,

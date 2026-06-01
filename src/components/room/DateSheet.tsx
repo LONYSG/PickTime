@@ -96,7 +96,6 @@ export function DateSheet({
     .map((a) => participantsById.get(a.participant_id))
     .filter(Boolean) as Participant[];
 
-  const allDayConfirmed = finalizedAllDay ? allDayParticipants : [];
   const holidayName = getHoliday(date);
 
   return (
@@ -183,25 +182,20 @@ export function DateSheet({
             />
           )}
 
-          {tallies.length === 0 && !adding && (
-            finalizedAllDay ? (
-              <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-4 space-y-2">
-                <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
-                  <Sun className="h-4 w-4" /> 하루종일 확정
-                </div>
-                {allDayConfirmed.length > 0 && (
-                  <VoterAvatars
-                    supporters={allDayConfirmed}
-                    explicitIds={allDayConfirmed.map((p) => p.id)}
-                    title="하루종일 참여자"
-                  />
-                )}
-              </div>
-            ) : (
-              <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-                {readOnly ? '이 날은 시간 후보가 없었어요.' : '아직 시간 후보가 없어요. 첫 후보를 추가해 보세요!'}
-              </p>
-            )
+          {/* 하루종일 항목 — 시간 후보 없을 때는 맨 위에 */}
+          {allDayParticipants.length > 0 && tallies.length === 0 && !adding && (
+            <AllDayRow
+              participants={allDayParticipants}
+              isFinalized={!!finalizedAllDay}
+              hasCandidates={false}
+            />
+          )}
+
+          {/* 시간 후보도 없고 하루종일도 없을 때만 empty 메시지 */}
+          {tallies.length === 0 && allDayParticipants.length === 0 && !adding && (
+            <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+              {readOnly ? '이 날은 시간 후보가 없었어요.' : '아직 시간 후보가 없어요. 첫 후보를 추가해 보세요!'}
+            </p>
           )}
 
           {tallies.map((t) => {
@@ -317,38 +311,13 @@ export function DateSheet({
             );
           })}
 
-          {/* 하루종일 가능 항목 — 항상 표시 */}
-          {allDayParticipants.length > 0 && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600">
-                  <Sun className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-amber-800">하루종일 가능</span>
-                    {tallies.length > 0 && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                        모든 후보 지지
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1">
-                    <VoterAvatars
-                      supporters={allDayParticipants}
-                      explicitIds={allDayParticipants.map((p) => p.id)}
-                      title="하루종일 가능 참여자"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col items-center pl-1">
-                  <span className="text-xl font-extrabold leading-none text-amber-600">
-                    {allDayParticipants.length}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">명</span>
-                </div>
-              </div>
-            </div>
+          {/* 하루종일 항목 — 시간 후보 있을 때는 맨 아래에 */}
+          {allDayParticipants.length > 0 && tallies.length > 0 && (
+            <AllDayRow
+              participants={allDayParticipants}
+              isFinalized={!!finalizedAllDay}
+              hasCandidates={true}
+            />
           )}
         </section>
 
@@ -407,6 +376,54 @@ function AddCandidate({
         >
           {submitLabel}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function AllDayRow({
+  participants,
+  isFinalized,
+  hasCandidates,
+}: {
+  participants: Participant[];
+  isFinalized: boolean;
+  hasCandidates: boolean;
+}) {
+  return (
+    <div className={cn(
+      'rounded-2xl border p-3',
+      isFinalized ? 'border-amber-300 bg-amber-50' : 'border-amber-200 bg-amber-50/60',
+    )}>
+      <div className="flex items-center gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600">
+          <Sun className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-amber-800">
+              {isFinalized ? '하루종일 확정' : '하루종일 가능'}
+            </span>
+            {!isFinalized && hasCandidates && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                모든 후보 지지
+              </span>
+            )}
+          </div>
+          <div className="mt-1">
+            <VoterAvatars
+              supporters={participants}
+              explicitIds={participants.map((p) => p.id)}
+              title={isFinalized ? '하루종일 확정 참여자' : '하루종일 가능 참여자'}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col items-center pl-1">
+          <span className="text-xl font-extrabold leading-none text-amber-600">
+            {participants.length}
+          </span>
+          <span className="text-[10px] text-muted-foreground">명</span>
+        </div>
       </div>
     </div>
   );
