@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Star, CalendarPlus, Check } from 'lucide-react';
-import { dayjs } from '@/lib/dayjs';
+import { dayjs, todayStr } from '@/lib/dayjs';
 import { cn, sortSupporters } from '@/lib/utils';
+import { isHoliday } from '@/lib/holidays';
 import { Button } from '@/components/ui/button';
 import { useRoomActions } from '@/hooks/useRoomActions';
 import type { DateHeat } from '@/lib/aggregate';
@@ -51,6 +52,7 @@ export function Calendar({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [applying, setApplying] = useState(false);
 
+  const today = todayStr();
   const canPrev = month.isAfter(start.startOf('month'));
   const canNext = month.isBefore(end.startOf('month'));
 
@@ -124,7 +126,7 @@ export function Calendar({
           </button>
         ))}
 
-      <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-muted-foreground">
+      <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground">
         {WEEKDAYS.map((d, i) => (
           <div key={d} className={cn(i === 0 && 'text-rose-400', i === 6 && 'text-sky-400')}>
             {d}
@@ -141,6 +143,8 @@ export function Calendar({
           const ratio = info && participantCount ? info.supporterIds.length / participantCount : 0;
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
           const isFinal = finalizedDate === ds;
+          const isToday = ds === today;
+          const isHol = isHoliday(ds);
           const isSelected = multi && selected.has(ds);
           const dots = sortSupporters(
             (info?.supporterIds ?? [])
@@ -184,9 +188,13 @@ export function Calendar({
               <span
                 className={cn(
                   'mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold',
-                  inRange ? 'text-foreground' : 'text-muted-foreground/40',
-                  d.day() === 0 && inRange && 'text-rose-500',
-                  d.day() === 6 && inRange && 'text-sky-500',
+                  isToday && inRange
+                    ? 'bg-primary text-primary-foreground'
+                    : inRange
+                      ? 'text-foreground'
+                      : 'text-muted-foreground/40',
+                  !isToday && inRange && (d.day() === 0 || isHol) && 'text-rose-500',
+                  !isToday && inRange && d.day() === 6 && !isHol && 'text-sky-500',
                 )}
               >
                 {isFinal ? <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> : d.date()}
