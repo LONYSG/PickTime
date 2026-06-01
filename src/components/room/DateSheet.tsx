@@ -89,12 +89,14 @@ export function DateSheet({
   const finalizedAllDay = room.finalized_options?.find(
     (o) => o.kind === 'allday' && o.date === date,
   );
-  const allDayConfirmed = finalizedAllDay
-    ? (availability
-        .filter((a) => a.date === date && a.status === 'all_day')
-        .map((a) => participantsById.get(a.participant_id))
-        .filter(Boolean) as Participant[])
-    : [];
+
+  // 하루종일 표시 참여자 (항상 계산)
+  const allDayParticipants = availability
+    .filter((a) => a.date === date && a.status === 'all_day')
+    .map((a) => participantsById.get(a.participant_id))
+    .filter(Boolean) as Participant[];
+
+  const allDayConfirmed = finalizedAllDay ? allDayParticipants : [];
   const holidayName = getHoliday(date);
 
   return (
@@ -314,6 +316,40 @@ export function DateSheet({
               </div>
             );
           })}
+
+          {/* 하루종일 가능 항목 — 항상 표시 */}
+          {allDayParticipants.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600">
+                  <Sun className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-amber-800">하루종일 가능</span>
+                    {tallies.length > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                        모든 후보 지지
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1">
+                    <VoterAvatars
+                      supporters={allDayParticipants}
+                      explicitIds={allDayParticipants.map((p) => p.id)}
+                      title="하루종일 가능 참여자"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col items-center pl-1">
+                  <span className="text-xl font-extrabold leading-none text-amber-600">
+                    {allDayParticipants.length}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">명</span>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Comments */}

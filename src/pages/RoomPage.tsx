@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
+import { Home, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
 import { VoterAvatars } from '@/components/room/VoterAvatars';
 import { useRoomData } from '@/hooks/useRoomData';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -76,7 +76,7 @@ export default function RoomPage() {
     : [];
 
   return (
-    <AuthProvider roomId={room.id} participants={data.participants}>
+    <AuthProvider roomId={room.id} roomTitle={room.title} participants={data.participants}>
       <div className="flex flex-1 flex-col pb-safe">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/90 px-3 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
@@ -85,7 +85,7 @@ export default function RoomPage() {
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted"
             aria-label="홈"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <Home className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-1.5 truncate text-base font-bold">

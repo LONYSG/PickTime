@@ -57,6 +57,8 @@ export default function CreateRoomPage() {
         nickname: nickname.trim(),
         color,
         role: 'host',
+        roomTitle: title.trim(),
+        joinedAt: new Date().toISOString(),
       });
       toast.success('방이 만들어졌어요!');
       nav(`/room/${res.room_id}`);

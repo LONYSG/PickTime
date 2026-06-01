@@ -114,4 +114,6 @@ export interface Session {
   nickname: string;
   color: string;
   role: Role;
+  roomTitle?: string;
+  joinedAt?: string; // ISO string, for sorting recent rooms
 }

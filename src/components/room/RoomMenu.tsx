@@ -107,10 +107,6 @@ export function RoomMenu({
           </Button>
         )}
 
-        <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
-          <Link2 className="h-5 w-5" /> 초대 링크 복사
-        </Button>
-
         {room.is_finalized ? (
           /* ── 확정 후 간소화 메뉴 ── */
           <>
@@ -167,6 +163,10 @@ export function RoomMenu({
         ) : (
           /* ── 일반 메뉴 ── */
           <>
+            <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
+              <Link2 className="h-5 w-5" /> 초대 링크 복사
+            </Button>
+
             <Button
               className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
               onClick={() => shareRoom(room.id, room.title)}

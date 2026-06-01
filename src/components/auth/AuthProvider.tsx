@@ -20,10 +20,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({
   roomId,
+  roomTitle,
   participants,
   children,
 }: {
   roomId: string;
+  roomTitle?: string;
   participants: Participant[];
   children: ReactNode;
 }) {
@@ -57,6 +59,7 @@ export function AuthProvider({
       <LoginSheet
         open={open}
         roomId={roomId}
+        roomTitle={roomTitle}
         participants={participants}
         onClose={handleClose}
         onAuthed={handleAuthed}

@@ -18,19 +18,20 @@ type Mode = 'choose' | 'new' | 'existing';
 export function LoginSheet({
   open,
   roomId,
+  roomTitle,
   participants,
   onClose,
   onAuthed,
 }: {
   open: boolean;
   roomId: string;
+  roomTitle?: string;
   participants: Participant[];
   onClose: () => void;
   onAuthed: (s: Session) => void;
 }) {
   const [mode, setMode] = useState<Mode>('choose');
   const setSession = useSessionStore((s) => s.setSession);
-  // 탈퇴/추방된 멤버는 다시 로그인 대상에서 제외 (색상 예약 위해 전체 목록은 신규 가입에만 전달)
   const loginable = participants.filter((p) => p.status !== 'left');
 
   useEffect(() => {
@@ -38,8 +39,9 @@ export function LoginSheet({
   }, [open]);
 
   const finish = (s: Session) => {
-    setSession(s);
-    onAuthed(s);
+    const enriched = { ...s, roomTitle, joinedAt: s.joinedAt ?? new Date().toISOString() };
+    setSession(enriched);
+    onAuthed(enriched);
   };
 
   return (
