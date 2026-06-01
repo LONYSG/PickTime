@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Link2,
+  MessageCircle,
   CheckCircle2,
   RotateCcw,
   Pencil,
@@ -42,6 +43,7 @@ import {
 } from '@/lib/api';
 import { useSessionStore } from '@/store/session';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { shareRoom } from '@/lib/kakao';
 import type { CandidateTally } from '@/lib/aggregate';
 import type { CandidateVote, Participant, Room, Session, TimeCandidate } from '@/lib/types';
 
@@ -102,6 +104,13 @@ export function RoomMenu({
 
         <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
           <Link2 className="h-5 w-5" /> 초대 링크 복사
+        </Button>
+
+        <Button
+          className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
+          onClick={() => shareRoom(room.id, room.title)}
+        >
+          <MessageCircle className="h-5 w-5" /> 카카오톡으로 공유
         </Button>
 
         {/* Finalize / reopen */}
