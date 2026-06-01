@@ -22,17 +22,19 @@ export function shareResult(
   if (!k?.Share) return;
 
   const url = `${window.location.origin}${window.location.pathname}#/room/${roomId}`;
+  // Put dates in title so they appear in the KakaoTalk preview
+  const datePreview = lines.slice(0, 2).join(' / ');
   k.Share.sendDefault({
     objectType: 'feed',
     content: {
       title: `[확정] ${title}`,
-      description: lines.join('\n'),
+      description: datePreview,
       imageUrl: 'https://lonysg.github.io/PickTime/og-card.png',
       imageWidth: 1200,
       imageHeight: 630,
       link: { mobileWebUrl: url, webUrl: url },
     },
-    buttons: [{ title: '결과 보기', link: { mobileWebUrl: url, webUrl: url } }],
+    buttons: [{ title: '상세 보기', link: { mobileWebUrl: url, webUrl: url } }],
   });
 }
 

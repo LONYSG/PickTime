@@ -9,7 +9,7 @@ import { toast } from '@/components/ui/toast';
 import { suggestColors } from '@/lib/colors';
 import { createRoom, friendlyError } from '@/lib/api';
 import { useSessionStore } from '@/store/session';
-import { nowKST } from '@/lib/dayjs';
+import { nowKST, todayStr } from '@/lib/dayjs';
 
 export default function CreateRoomPage() {
   const nav = useNavigate();
@@ -94,7 +94,7 @@ export default function CreateRoomPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>시작일</Label>
-              <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+              <Input type="date" min={todayStr()} value={start} onChange={(e) => setStart(e.target.value)} />
             </div>
             <div>
               <Label>종료일</Label>

@@ -26,7 +26,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Dialog } from '@/components/ui/dialog';
 import { PinInput } from '@/components/PinInput';
 import { toast } from '@/components/ui/toast';
-import { dayjs } from '@/lib/dayjs';
+import { dayjs, todayStr } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
 import { qk } from '@/lib/queryClient';
 import {
@@ -73,8 +73,9 @@ export function RoomMenu({
   const qc = useQueryClient();
   const clearSession = useSessionStore((s) => s.clearSession);
   const { ensureAuth } = useAuth();
-  const isManager = session?.role === 'host' || session?.role === 'admin';
   const me = session ? participants.find((p) => p.id === session.participantId) : undefined;
+  const myRole = me?.role ?? session?.role;
+  const isManager = myRole === 'host' || myRole === 'admin';
   const [finalizing, setFinalizing] = useState(false);
 
   const refreshRoom = () => qc.invalidateQueries({ queryKey: qk.room(room.id) });
@@ -538,7 +539,7 @@ function RoomSettingsForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label>시작일</Label>
-          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          <Input type="date" min={todayStr()} value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
         <div>
           <Label>종료일</Label>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
+import { ChevronLeft, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users, Sun } from 'lucide-react';
+import { Avatar } from '@/components/ui/avatar';
 import { useRoomData } from '@/hooks/useRoomData';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSession } from '@/store/session';
@@ -129,19 +130,51 @@ export default function RoomPage() {
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {/* Finalized banner */}
           {room.is_finalized && finalizedDates.length > 0 && (
-            <div className="flex items-start gap-3 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-400 p-4 text-white shadow-soft">
-              <CheckCircle2 className="h-7 w-7 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium opacity-90">일정이 확정됐어요</p>
-                {(room.finalized_options?.length ? room.finalized_options : [{ kind: 'allday' as const, date: finalizedDate! }]).map((opt, i) => {
-                  const d = dayjs(opt.date).format('M월 D일 (ddd)');
-                  const cand = ranked.find((r) => r.candidate.id === opt.candidate_id);
-                  return (
-                    <p key={i} className="font-bold">
-                      {d}{cand ? ` · ${fmtRange(cand.candidate.start_time, cand.candidate.end_time)}` : ' · 하루종일'}
-                    </p>
-                  );
-                })}
+            <div className="space-y-2 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-400 p-4 text-white shadow-soft">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium opacity-90">일정이 확정됐어요</p>
+                  {(room.finalized_options?.length
+                    ? room.finalized_options
+                    : [{ kind: 'allday' as const, date: finalizedDate! }]
+                  ).map((opt, i) => {
+                    const d = dayjs(opt.date).format('M월 D일 (ddd)');
+                    const cand = ranked.find((r) => r.candidate.id === opt.candidate_id);
+                    // confirmed = explicit voters ∪ all-day marks
+                    const allDayIds = data.availability
+                      .filter((a) => a.date === opt.date && a.status === 'all_day')
+                      .map((a) => a.participant_id);
+                    const voteIds = opt.kind === 'candidate'
+                      ? data.votes.filter((v) => v.candidate_id === opt.candidate_id).map((v) => v.participant_id)
+                      : [];
+                    const confirmedIds = Array.from(new Set([...voteIds, ...allDayIds]));
+                    const confirmed = confirmedIds
+                      .map((id) => participantsById.get(id))
+                      .filter(Boolean) as Participant[];
+                    return (
+                      <div key={i} className={cn(i > 0 && 'mt-2 border-t border-white/30 pt-2')}>
+                        <p className="font-bold">
+                          {d}{cand ? ` · ${fmtRange(cand.candidate.start_time, cand.candidate.end_time)}` : ' · 하루종일'}
+                        </p>
+                        {confirmed.length > 0 && (
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <Sun className="h-3.5 w-3.5 opacity-80" />
+                            <span className="text-xs opacity-90">{confirmed.length}명 참여</span>
+                            <div className="flex -space-x-1">
+                              {confirmed.slice(0, 6).map((p) => (
+                                <Avatar key={p.id} nickname={p.nickname} color={p.color_hex} size="sm" />
+                              ))}
+                              {confirmed.length > 6 && (
+                                <span className="ml-1 text-xs opacity-80">+{confirmed.length - 6}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
