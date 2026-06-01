@@ -11,7 +11,7 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
-const API_KEY = process.env.HOLIDAY_API_KEY;
+const API_KEY = process.env.HOLIDAY_API_KEY?.trim();
 
 async function fetchYear(year) {
   const url =
