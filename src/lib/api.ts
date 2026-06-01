@@ -24,6 +24,8 @@ export function friendlyError(err: unknown): string {
     not_found: '대상을 찾을 수 없어요.',
     host_cannot_leave: '방장은 나갈 수 없어요. 방을 삭제하거나 그대로 두세요.',
     invalid_status: '잘못된 상태예요.',
+    room_finalized: '일정이 확정된 방이에요. 변경하려면 방을 다시 열어야 해요.',
+    not_a_member: '더 이상 이 방의 멤버가 아니에요.',
   };
   for (const key of Object.keys(map)) if (msg.includes(key)) return map[key];
   return '문제가 발생했어요. 잠시 후 다시 시도해 주세요.';

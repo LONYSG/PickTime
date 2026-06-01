@@ -13,12 +13,17 @@
     <title>PickTime — 친구들과 시간 맞추기</title>
     <meta name="description" content="링크 열고 바로 모두의 가능한 시간을 확인하고 투표하세요." />
 
-    <!-- Static social preview (MVP) -->
+    <!-- Static social preview (MVP). Absolute URLs: meta content is NOT
+         base-rewritten by Vite, so relative paths break on GitHub Pages. -->
     <meta property="og:title" content="PickTime — 친구들과 시간 맞추기" />
     <meta property="og:description" content="링크 열고 바로 모두의 가능한 시간을 확인하고 투표하세요." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/og-card.png" />
+    <meta property="og:url" content="https://lonysg.github.io/PickTime/" />
+    <meta property="og:image" content="https://lonysg.github.io/PickTime/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://lonysg.github.io/PickTime/og-card.png" />
   </head>
   <body>
     <div id="root"></div>

@@ -65,7 +65,7 @@ export function useRoomData(roomId: string | undefined) {
         qc.invalidateQueries({ queryKey: qk.candidates(roomId) });
         qc.invalidateQueries({ queryKey: qk.votes(roomId) });
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidate_votes' }, () =>
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidate_votes', filter }, () =>
         qc.invalidateQueries({ queryKey: qk.votes(roomId) }),
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'date_availability', filter }, () =>

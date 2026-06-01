@@ -54,6 +54,7 @@ export interface CandidateVote {
   id: string;
   candidate_id: string;
   participant_id: string;
+  room_id?: string; // populated by a DB trigger; used for realtime scoping
   created_at: string;
 }
 
