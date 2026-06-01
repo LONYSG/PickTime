@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users, Sun } from 'lucide-react';
-import { Avatar } from '@/components/ui/avatar';
+import { ChevronLeft, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
+import { VoterAvatars } from '@/components/room/VoterAvatars';
 import { useRoomData } from '@/hooks/useRoomData';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSession } from '@/store/session';
@@ -158,17 +158,12 @@ export default function RoomPage() {
                           {d}{cand ? ` · ${fmtRange(cand.candidate.start_time, cand.candidate.end_time)}` : ' · 하루종일'}
                         </p>
                         {confirmed.length > 0 && (
-                          <div className="mt-1.5 flex items-center gap-1.5">
-                            <Sun className="h-3.5 w-3.5 opacity-80" />
-                            <span className="text-xs opacity-90">{confirmed.length}명 참여</span>
-                            <div className="flex -space-x-1">
-                              {confirmed.slice(0, 6).map((p) => (
-                                <Avatar key={p.id} nickname={p.nickname} color={p.color_hex} size="sm" />
-                              ))}
-                              {confirmed.length > 6 && (
-                                <span className="ml-1 text-xs opacity-80">+{confirmed.length - 6}</span>
-                              )}
-                            </div>
+                          <div className="mt-1.5">
+                            <VoterAvatars
+                              supporters={confirmed}
+                              explicitIds={voteIds}
+                              title={`${d}${cand ? ` · ${fmtRange(cand.candidate.start_time, cand.candidate.end_time)}` : ' · 하루종일'} 참여자`}
+                            />
                           </div>
                         )}
                       </div>
