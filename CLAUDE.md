@@ -476,7 +476,7 @@ The ideal outcome:
 > what was **actually built**, where it lives, and how to maintain it from a
 > fresh machine / new session. Keep this section updated as the app evolves.
 
-## Status snapshot (last updated 2026-06-01)
+## Status snapshot (last updated 2026-06-02)
 
 - **Status:** Built and deployed (MVP feature-complete, live in production).
 - **Live site:** https://lonysg.github.io/PickTime/
@@ -516,7 +516,7 @@ Commit and push to `main`; `.github/workflows/deploy.yml` builds with the
 secrets and publishes to GitHub Pages. Watch with `gh run watch`.
 
 - Pages source = **GitHub Actions** (already configured).
-- Repo Actions **secrets**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+- Repo Actions **secrets**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_KAKAO_JS_KEY`.
 - **Base path** is `/PickTime/` (see `vite.config.ts`, derived from the repo
   name). If the repo is ever renamed, set repo Actions **variable** `VITE_BASE`
   to `/<new-name>/`, or the deployed asset paths break.
@@ -535,6 +535,10 @@ supabase/migrations/   SQL — run these in the Supabase SQL editor in order
   0006_sessions_...      participant_sessions table (multiple concurrent
                          sessions per participant — login on a 2nd device no
                          longer logs out the 1st) + update_room_settings drops
+  0007_holidays.sql      holidays table (RLS public read; populated by batch)
+  0008_transfer_host     transfer_host RPC (host → admin, promote another)
+  0009_finalize_allday   finalized_date column + finalize_room_allday RPC
+  0010_multi_finalize    finalized_options jsonb column + finalize_room_multi RPC
                          out-of-range candidates/votes and notifies on range
                          change
 src/
@@ -632,7 +636,7 @@ Deviations from the "suggested schema" in Part 1 (intentional):
   in the dashboard).
 - **Applying schema changes:** add a new numbered file under
   `supabase/migrations/` and run it in the Supabase **SQL editor** (there is no
-  automated migration runner wired up). Migrations 0001–0004 are already applied
+  automated migration runner wired up). Migrations 0001–0010 are already applied
   to the live project.
 - **pg_cron auto-cleanup is optional:** `delete_expired_rooms()` is only
   scheduled if the `pg_cron` extension is enabled (0001 guards this). If it's
@@ -649,8 +653,21 @@ regenerated with `npm run og` (`scripts/make-og.mjs`, renders an SVG via
 `sharp`). `index.html` references it with **absolute** URLs — meta `content` is
 not base-rewritten by Vite, so relative paths 404 on GitHub Pages.
 
+## Additional features (added post-MVP)
+
+- **PWA PNG icons** — 192×192 and 512×512 added to `/public/`, vite.config updated.
+- **Host transfer** — `transfer_host` RPC + 왕관 버튼 UI.
+- **Korean public holidays** — 공공데이터포털 API → GitHub Actions weekly sync → `holidays` table → `useHolidays` hook. Calendar marks holidays red; DateSheet title includes holiday name.
+- **KakaoTalk share** — `shareRoom()` (invite) and `shareResult()` (confirmed result) via Kakao SDK. Result share includes confirmed dates + "N개 외" format.
+- **Today highlight** — primary-color circle on today's date in the calendar.
+- **Drag mode toggle** — TimeRangePicker requires explicit toggle to avoid hijacking scroll.
+- **Multi-finalization** — `finalize_room_multi` RPC; `finalized_options jsonb[]` on rooms; FinalizeDialog multi-select with voter avatars.
+- **All-day in candidate list** — DateSheet shows `AllDayRow` in candidates section (top when no candidates, bottom otherwise).
+- **Post-finalization menu** — simplified to result-share + reopen only; "확정" badge on calendar finalized dates; per-option confirmed-member avatars in finalized banner.
+- **Homepage recent rooms** — sessions store `roomTitle`/`joinedAt`; HomePage fetches room data with date range and "확정"/"만료" badges; expired rooms show delete button.
+- **Session role sync** — RoomPage auto-syncs `session.role` from DB on participants load (no refresh needed after role change).
+
 ## TODO / not done
 
-- Proper PWA PNG icons (currently an SVG icon only; see `vite.config.ts`).
-- Host transfer (host can't leave; an inactive host can't be replaced).
 - Bundle is a single ~155 KB-gzip chunk (fine for MVP; could code-split later).
+- Host transfer flow (host can delete room but not transfer — if host goes inactive, no one can manage).

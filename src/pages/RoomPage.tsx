@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Home, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
 import { VoterAvatars } from '@/components/room/VoterAvatars';
 import { useRoomData } from '@/hooks/useRoomData';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useSession } from '@/store/session';
+import { useSession, useSessionStore } from '@/store/session';
 import { heatByDate, rankCandidates, rankPromising } from '@/lib/aggregate';
 import { dayjs } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
@@ -27,6 +27,7 @@ export default function RoomPage() {
   const data = useRoomData(roomId);
   const session = useSession(roomId);
 
+  const setSession = useSessionStore((s) => s.setSession);
   const [pwOk, setPwOk] = useState(() => !!sessionStorage.getItem(`pt-pw-${roomId}`));
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -35,6 +36,15 @@ export default function RoomPage() {
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
 
   const { notifications, unread } = useNotifications(session?.participantId);
+
+  // DB role이 localStorage session role과 다르면 자동 동기화
+  useEffect(() => {
+    if (!session || !data.participants.length) return;
+    const me = data.participants.find((p) => p.id === session.participantId);
+    if (me && me.role !== session.role) {
+      setSession({ ...session, role: me.role });
+    }
+  }, [data.participants, session?.participantId, session?.role]);
 
   const participantsById = useMemo(
     () => new Map<string, Participant>(data.participants.map((p) => [p.id, p])),
