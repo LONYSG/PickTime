@@ -346,3 +346,11 @@ export async function kickParticipant(token: string, targetId: string) {
   });
   if (error) throw error;
 }
+
+export async function transferHost(token: string, newHostId: string) {
+  const { error } = await supabase.rpc('transfer_host', {
+    p_token: token,
+    p_new_host_id: newHostId,
+  });
+  if (error) throw error;
+}

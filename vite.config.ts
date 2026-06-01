@@ -28,9 +28,9 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: base,
         scope: base,
-        // SVG icon for MVP. For best iOS/Android home-screen results, add
-        // pwa-192x192.png / pwa-512x512.png to /public and reference them here.
         icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
           { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
       },

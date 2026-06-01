@@ -17,6 +17,7 @@ import {
   UserMinus,
   DoorOpen,
   LogIn,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Sheet } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ import {
   resetParticipantPin,
   setParticipantRole,
   setSelfParticipation,
+  transferHost,
   updateRoomSettings,
 } from '@/lib/api';
 import { useSessionStore } from '@/store/session';
@@ -288,6 +290,7 @@ function ParticipantRow({
   const [editing, setEditing] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [kicking, setKicking] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [name, setName] = useState(p.nickname);
   const isMe = session?.participantId === p.id;
 
@@ -344,6 +347,15 @@ function ParticipantRow({
             >
               <KeyRound className="h-4 w-4" />
             </button>
+            {session?.role === 'host' && !isMe && (
+              <button
+                onClick={() => setTransferring(true)}
+                className="grid h-8 w-8 place-items-center rounded-full text-amber-500 hover:bg-card"
+                aria-label="호스트 위임"
+              >
+                <Crown className="h-4 w-4" />
+              </button>
+            )}
             {!isMe && (
               <button
                 onClick={() => setKicking(true)}
@@ -356,6 +368,34 @@ function ParticipantRow({
           </div>
         )}
       </div>
+
+      {transferring && session && (
+        <Dialog open onClose={() => setTransferring(false)} title={`${p.nickname}님께 호스트를 위임할까요?`}>
+          <p className="text-sm text-muted-foreground">
+            {p.nickname}님이 새 호스트가 되고, 나는 관리자로 전환돼요.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setTransferring(false)}>
+              취소
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={async () => {
+                try {
+                  await transferHost(session.token, p.id);
+                  setTransferring(false);
+                  onChanged();
+                  toast.success(`${p.nickname}님께 호스트를 위임했어요.`);
+                } catch (e) {
+                  toast.error(friendlyError(e));
+                }
+              }}
+            >
+              <ArrowRightLeft className="h-4 w-4" /> 위임
+            </Button>
+          </div>
+        </Dialog>
+      )}
 
       {kicking && session && (
         <Dialog open onClose={() => setKicking(false)} title={`${p.nickname}님을 추방할까요?`}>
