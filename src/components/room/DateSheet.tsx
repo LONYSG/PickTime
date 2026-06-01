@@ -84,6 +84,17 @@ export function DateSheet({
 
   if (!date) return null;
   const d = dayjs(date);
+
+  // 이 날짜가 하루종일로 확정됐는지 확인
+  const finalizedAllDay = room.finalized_options?.find(
+    (o) => o.kind === 'allday' && o.date === date,
+  );
+  const allDayConfirmed = finalizedAllDay
+    ? (availability
+        .filter((a) => a.date === date && a.status === 'all_day')
+        .map((a) => participantsById.get(a.participant_id))
+        .filter(Boolean) as Participant[])
+    : [];
   const holidayName = getHoliday(date);
 
   return (
@@ -171,10 +182,25 @@ export function DateSheet({
           )}
 
           {tallies.length === 0 && !adding && (
-            <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-              아직 시간 후보가 없어요.
-              {!readOnly && ' 첫 후보를 추가해 보세요!'}
-            </p>
+            finalizedAllDay ? (
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-4 space-y-2">
+                <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+                  <Sun className="h-4 w-4" /> 하루종일 확정
+                </div>
+                {allDayConfirmed.length > 0 && (
+                  <VoterAvatars
+                    supporters={allDayConfirmed}
+                    explicitIds={allDayConfirmed.map((p) => p.id)}
+                    title="하루종일 참여자"
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+                아직 시간 후보가 없어요.
+                {!readOnly && ' 첫 후보를 추가해 보세요!'}
+              </p>
+            )
           )}
 
           {tallies.map((t) => {
