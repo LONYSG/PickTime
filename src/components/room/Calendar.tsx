@@ -211,7 +211,7 @@ export function Calendar({
               )}
 
               {dots.length > 0 ? (
-                <span className="mt-auto flex flex-wrap items-center justify-center gap-0.5">
+                <span className="mt-0.5 flex flex-wrap items-center justify-center gap-0.5">
                   {dots.map((c, i) => (
                     <span
                       key={i}
@@ -228,7 +228,7 @@ export function Calendar({
               ) : (
                 inRange &&
                 hasCandidates && (
-                  <span className="mt-auto h-1.5 w-1.5 rounded-full border border-indigo-300" />
+                  <span className="mt-0.5 h-1.5 w-1.5 rounded-full border border-indigo-300" />
                 )
               )}
             </button>
