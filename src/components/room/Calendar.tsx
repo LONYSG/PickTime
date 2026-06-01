@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Star, CalendarPlus, Check } from 'lucide-react';
 import { dayjs, todayStr } from '@/lib/dayjs';
 import { cn, sortSupporters } from '@/lib/utils';
-import { isHoliday } from '@/lib/holidays';
+import { useHolidays } from '@/hooks/useHolidays';
 import { Button } from '@/components/ui/button';
 import { useRoomActions } from '@/hooks/useRoomActions';
 import type { DateHeat } from '@/lib/aggregate';
@@ -53,6 +53,7 @@ export function Calendar({
   const [applying, setApplying] = useState(false);
 
   const today = todayStr();
+  const isHoliday = useHolidays(month.year());
   const canPrev = month.isAfter(start.startOf('month'));
   const canNext = month.isBefore(end.startOf('month'));
 
