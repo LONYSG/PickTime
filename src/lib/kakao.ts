@@ -22,13 +22,13 @@ export function shareResult(
   if (!k?.Share) return;
 
   const url = `${window.location.origin}${window.location.pathname}#/room/${roomId}`;
-  // Put dates in title so they appear in the KakaoTalk preview
-  const datePreview = lines.slice(0, 2).join(' / ');
+  const firstLine = lines[0] ?? '';
+  const rest = lines.slice(1).join(' / ');
   k.Share.sendDefault({
     objectType: 'feed',
     content: {
-      title: `[확정] ${title}`,
-      description: datePreview,
+      title: firstLine ? `[확정] ${title} — ${firstLine}` : `[확정] ${title}`,
+      description: rest || '상세 일정을 확인하세요',
       imageUrl: 'https://lonysg.github.io/PickTime/og-card.png',
       imageWidth: 1200,
       imageHeight: 630,

@@ -91,12 +91,27 @@ export function RoomMenu({
     }
   }
 
-  const resultLines = (room.finalized_options ?? []).map((opt) => {
-    const d = dayjs(opt.date).format('M월 D일 (ddd)');
-    if (opt.kind === 'allday') return `${d} · 하루종일`;
-    const cand = candidates.find((c) => c.id === opt.candidate_id);
-    return cand ? `${d} · ${fmtRange(cand.start_time, cand.end_time)}` : d;
-  });
+  const resultLines = (() => {
+    const opts = room.finalized_options ?? [];
+    if (opts.length > 0) {
+      return opts.map((opt) => {
+        const d = dayjs(opt.date).format('M월 D일 (ddd)');
+        if (opt.kind === 'allday') return `${d} · 하루종일`;
+        const cand = candidates.find((c) => c.id === opt.candidate_id);
+        return cand ? `${d} · ${fmtRange(cand.start_time, cand.end_time)}` : d;
+      });
+    }
+    // 이전 방식으로 확정된 방 fallback
+    if (room.finalized_date) {
+      const d = dayjs(room.finalized_date).format('M월 D일 (ddd)');
+      if (room.finalized_candidate_id) {
+        const cand = candidates.find((c) => c.id === room.finalized_candidate_id);
+        if (cand) return [`${d} · ${fmtRange(cand.start_time, cand.end_time)}`];
+      }
+      return [`${d} · 하루종일`];
+    }
+    return [];
+  })();
 
   return (
     <Sheet open={open} onClose={onClose} title="방 메뉴">
