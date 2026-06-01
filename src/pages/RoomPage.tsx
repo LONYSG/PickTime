@@ -65,6 +65,9 @@ export default function RoomPage() {
   const finalized = room.is_finalized
     ? ranked.find((r) => r.candidate.id === room.finalized_candidate_id)
     : undefined;
+  const finalizedDate = room.is_finalized
+    ? (finalized?.candidate.date ?? room.finalized_date ?? null)
+    : null;
 
   return (
     <AuthProvider roomId={room.id} participants={data.participants}>
@@ -120,14 +123,16 @@ export default function RoomPage() {
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {/* Finalized banner */}
-          {finalized && (
+          {room.is_finalized && finalizedDate && (
             <div className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-400 p-4 text-white shadow-soft">
               <CheckCircle2 className="h-7 w-7 shrink-0" />
               <div>
                 <p className="text-xs font-medium opacity-90">일정이 확정됐어요</p>
                 <p className="font-bold">
-                  {dayjs(finalized.candidate.date).format('M월 D일 (ddd)')} ·{' '}
-                  {fmtRange(finalized.candidate.start_time, finalized.candidate.end_time)}
+                  {dayjs(finalizedDate).format('M월 D일 (ddd)')}
+                  {finalized
+                    ? ` · ${fmtRange(finalized.candidate.start_time, finalized.candidate.end_time)}`
+                    : ' · 하루종일'}
                 </p>
               </div>
             </div>
@@ -169,7 +174,7 @@ export default function RoomPage() {
                 heat={heat}
                 participantCount={activeParticipants.length}
                 participantsById={participantsById}
-                finalizedDate={finalized?.candidate.date ?? null}
+                finalizedDate={finalizedDate}
                 readOnly={room.is_finalized}
                 onPick={setPickedDate}
               />
@@ -225,7 +230,7 @@ export default function RoomPage() {
           participants={activeParticipants}
           candidates={data.candidates}
           votes={data.votes}
-          ranked={ranked}
+          promising={promising}
         />
       </div>
     </AuthProvider>

@@ -354,3 +354,11 @@ export async function transferHost(token: string, newHostId: string) {
   });
   if (error) throw error;
 }
+
+export async function finalizeRoomAllDay(token: string, date: string) {
+  const { error } = await supabase.rpc('finalize_room_allday', {
+    p_token: token,
+    p_date: date,
+  });
+  if (error) throw error;
+}

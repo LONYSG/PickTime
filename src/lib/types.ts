@@ -18,6 +18,7 @@ export interface Room {
   host_participant_id: string | null;
   is_finalized: boolean;
   finalized_candidate_id: string | null;
+  finalized_date: string | null; // YYYY-MM-DD
   created_at: string;
   last_activity_at: string;
 }

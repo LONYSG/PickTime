@@ -32,6 +32,7 @@ import { qk } from '@/lib/queryClient';
 import {
   deleteRoom,
   finalizeRoom,
+  finalizeRoomAllDay,
   friendlyError,
   kickParticipant,
   leaveRoom,
@@ -46,7 +47,7 @@ import {
 import { useSessionStore } from '@/store/session';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { shareRoom } from '@/lib/kakao';
-import type { CandidateTally } from '@/lib/aggregate';
+import type { PromisingOption } from '@/lib/aggregate';
 import type { CandidateVote, Participant, Room, Session, TimeCandidate } from '@/lib/types';
 
 export function RoomMenu({
@@ -57,7 +58,8 @@ export function RoomMenu({
   participants,
   candidates,
   votes,
-  ranked,
+
+  promising,
 }: {
   open: boolean;
   onClose: () => void;
@@ -66,7 +68,7 @@ export function RoomMenu({
   participants: Participant[];
   candidates: TimeCandidate[];
   votes: CandidateVote[];
-  ranked: CandidateTally[];
+  promising: PromisingOption[];
 }) {
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -139,7 +141,7 @@ export function RoomMenu({
               <Button
                 className="w-full justify-start"
                 onClick={() => setFinalizing(true)}
-                disabled={ranked.filter((r) => r.total > 0).length === 0}
+                disabled={promising.filter((r) => r.total > 0).length === 0}
               >
                 <CheckCircle2 className="h-5 w-5" /> 일정 확정하기
               </Button>
@@ -257,15 +259,19 @@ export function RoomMenu({
 
       {finalizing && session && (
         <FinalizeDialog
-          ranked={ranked}
+          promising={promising}
           onClose={() => setFinalizing(false)}
-          onPick={async (candidateId) => {
+          onPick={async (option) => {
             try {
-              await finalizeRoom(session.token, candidateId);
+              if (option.kind === 'candidate') {
+                await finalizeRoom(session.token, option.id);
+              } else {
+                await finalizeRoomAllDay(session.token, option.date);
+              }
               refreshRoom();
               setFinalizing(false);
               onClose();
-              toast.success('일정을 확정했어요! 🎉');
+              toast.success('일정을 확정했어요!');
             } catch (e) {
               toast.error(friendlyError(e));
             }
@@ -581,29 +587,31 @@ function RoomSettingsForm({
 }
 
 function FinalizeDialog({
-  ranked,
+  promising,
   onClose,
   onPick,
 }: {
-  ranked: CandidateTally[];
+  promising: PromisingOption[];
   onClose: () => void;
-  onPick: (candidateId: string) => void;
+  onPick: (option: PromisingOption) => void;
 }) {
-  const options = ranked.filter((r) => r.total > 0).slice(0, 8);
+  const options = promising.filter((r) => r.total > 0).slice(0, 8);
   return (
-    <Dialog open onClose={onClose} title="확정할 시간 선택">
+    <Dialog open onClose={onClose} title="확정할 일정 선택">
       <div className="space-y-2">
-        {options.map((t) => (
+        {options.map((opt) => (
           <button
-            key={t.candidate.id}
-            onClick={() => onPick(t.candidate.id)}
+            key={opt.id}
+            onClick={() => onPick(opt)}
             className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 text-left active:scale-[0.99]"
           >
             <span className="font-semibold">
-              {dayjs(t.candidate.date).format('M/D (ddd)')} ·{' '}
-              {fmtRange(t.candidate.start_time, t.candidate.end_time)}
+              {dayjs(opt.date).format('M/D (ddd)')}
+              {opt.kind === 'candidate'
+                ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}`
+                : ' · 하루종일'}
             </span>
-            <span className="font-bold text-primary">{t.total}표</span>
+            <span className="font-bold text-primary">{opt.total}표</span>
           </button>
         ))}
       </div>
