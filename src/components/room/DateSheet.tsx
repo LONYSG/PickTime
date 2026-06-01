@@ -18,6 +18,7 @@ import { TimeRangePicker } from './TimeRangePicker';
 import { VoterAvatars } from './VoterAvatars';
 import { toast } from '@/components/ui/toast';
 import { dayjs } from '@/lib/dayjs';
+import { useHolidays } from '@/hooks/useHolidays';
 import { fmtRange, cn } from '@/lib/utils';
 import { tallyForDate } from '@/lib/aggregate';
 import { useRoomActions } from '@/hooks/useRoomActions';
@@ -81,6 +82,8 @@ export function DateSheet({
 
   if (!date) return null;
   const d = dayjs(date);
+  const getHoliday = useHolidays(d.year());
+  const holidayName = getHoliday(date);
 
   return (
     <Sheet
@@ -90,7 +93,7 @@ export function DateSheet({
         setEditingId(null);
         onClose();
       }}
-      title={d.format('M월 D일 (ddd)')}
+      title={holidayName ? `${d.format('M월 D일 (ddd)')} · ${holidayName}` : d.format('M월 D일 (ddd)')}
     >
       <div className="space-y-5 pb-4">
         {/* My status for this date: all-day / unavailable */}

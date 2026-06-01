@@ -145,7 +145,7 @@ export function Calendar({
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
           const isFinal = finalizedDate === ds;
           const isToday = ds === today;
-          const isHol = isHoliday(ds);
+          const isHol = isHoliday(ds) !== null;
           const isSelected = multi && selected.has(ds);
           const dots = sortSupporters(
             (info?.supporterIds ?? [])
