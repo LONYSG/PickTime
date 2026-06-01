@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Star, CalendarPlus, Check } from 'lucide-react';
-import { dayjs, todayStr } from '@/lib/dayjs';
+import { dayjs, todayStr, nowKST } from '@/lib/dayjs';
 import { cn, sortSupporters } from '@/lib/utils';
 import { useHolidays } from '@/hooks/useHolidays';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,16 @@ export function Calendar({
   const finalSet = new Set(finalizedDates ?? (finalizedDate ? [finalizedDate] : []));
   const start = dayjs(rangeStart);
   const end = dayjs(rangeEnd);
-  const [month, setMonth] = useState(() => start.startOf('month'));
+  const [month, setMonth] = useState(() => {
+    const todayMonth = nowKST().startOf('month');
+    const startMonth = start.startOf('month');
+    const endMonth = end.startOf('month');
+    // 오늘이 방 기간 내에 있으면 현재 달로, 아니면 시작 달로
+    if (!todayMonth.isBefore(startMonth) && !todayMonth.isAfter(endMonth)) {
+      return todayMonth;
+    }
+    return startMonth;
+  });
   const actions = useRoomActions(roomId);
 
   // Bulk "available all day" selection mode.

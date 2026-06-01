@@ -476,198 +476,322 @@ The ideal outcome:
 > what was **actually built**, where it lives, and how to maintain it from a
 > fresh machine / new session. Keep this section updated as the app evolves.
 
+---
+
 ## Status snapshot (last updated 2026-06-02)
 
-- **Status:** Built and deployed (MVP feature-complete, live in production).
+- **Status:** Feature-complete beyond MVP, live in production.
 - **Live site:** https://lonysg.github.io/PickTime/
 - **Repo:** https://github.com/LONYSG/PickTime (public, owner `LONYSG`)
 - **Supabase project ref:** `yttvmtomohvxnradchol`
   (URL `https://yttvmtomohvxnradchol.supabase.co`)
-- **Auto-deploy:** push to `main` → GitHub Actions builds and deploys to Pages.
+- **Auto-deploy:** push to `main` → GitHub Actions (`deploy.yml`) builds and deploys to GitHub Pages.
+- **KakaoTalk share:** registered app at https://developers.kakao.com, domain `https://lonysg.github.io` registered as Web platform.
 
-## Run it on a fresh machine
+---
+
+## Setting up on a fresh machine
 
 ```bash
 git clone https://github.com/LONYSG/PickTime.git
 cd PickTime
 npm install
-cp .env.example .env.local      # then fill in the two values below
-npm run dev                      # http://localhost:5173/PickTime/
+cp .env.example .env.local   # fill in all three keys (see below)
+npm run dev                   # http://localhost:5173/PickTime/
 ```
 
-`.env.local` (gitignored — never committed) needs:
-
+**`.env.local`** (gitignored, never committed):
 ```
 VITE_SUPABASE_URL=https://yttvmtomohvxnradchol.supabase.co
-VITE_SUPABASE_ANON_KEY=<the publishable client key>
+VITE_SUPABASE_ANON_KEY=sb_publishable_...   # Supabase → Project Settings → API → anon public key
+VITE_KAKAO_JS_KEY=...                        # Kakao Developers → 앱 설정 → 앱 키 → JavaScript 키
 ```
 
-Get the key from **Supabase dashboard → Project Settings → API** (it's the
-`sb_publishable_...` / anon public key — client-safe by design; it already
-ships in the public JS bundle). The same two values are stored as GitHub
-Actions secrets for the deploy build.
+Useful scripts:
+- `npm run dev` — dev server at http://localhost:5173/PickTime/
+- `npm run build` — typecheck + production build (this is the CI gate)
+- `npm run typecheck` — TS-only check without build
+- `npm run preview` — preview the production build locally
+- `npm run og` — regenerate `public/og-card.png` social preview image
 
-Useful scripts: `npm run build` (typecheck + production build — the CI gate),
-`npm run typecheck`, `npm run dev`, `npm run preview`.
+---
+
+## GitHub Actions secrets (repo Settings → Secrets → Actions)
+
+| Secret | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL — injected at build time |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/publishable key — injected at build time |
+| `VITE_KAKAO_JS_KEY` | Kakao JavaScript key — injected at build time |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (bypasses RLS) — used by sync-holidays batch |
+| `HOLIDAY_API_KEY` | 공공데이터포털 한국천문연구원 특일정보 API 인증키 |
+| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token — used by deploy-functions workflow |
+
+---
+
+## GitHub Actions workflows
+
+### `deploy.yml` — GitHub Pages (runs on every push to `main`)
+Builds the Vite app with the VITE_* secrets and deploys to GitHub Pages.
+Node.js 22. FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true to suppress deprecation warnings.
+
+### `sync-holidays.yml` — 공휴일 배치 (매주 월요일 00:00 UTC, 수동 실행 가능)
+Node 22. Calls `scripts/sync-holidays.mjs` which:
+1. Fetches Korean public holidays from 공공데이터포털 API (3 years: current ± 1)
+2. Upserts into `holidays` table in Supabase using service role key
+This is the only source of truth for Korean holidays — no hardcoded dates in frontend.
+
+### `deploy-functions.yml` — Supabase Edge Functions (runs when `supabase/functions/**` changes)
+Deploys `supabase/functions/share/index.ts` via Supabase CLI.
+The `share` Edge Function: given `?room=<roomId>`, fetches room title from DB,
+returns HTML with dynamic OG tags + JS redirect to the app. Used for KakaoTalk
+link-copy sharing (so the preview shows the room name, not just "PickTime").
+
+---
 
 ## Deploy flow
 
-Commit and push to `main`; `.github/workflows/deploy.yml` builds with the
-secrets and publishes to GitHub Pages. Watch with `gh run watch`.
+```bash
+git add .
+git commit -m "..."
+git push origin main
+# → deploy.yml fires automatically
+# → monitor: gh run list --workflow deploy.yml
+```
 
-- Pages source = **GitHub Actions** (already configured).
-- Repo Actions **secrets**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_KAKAO_JS_KEY`.
-- **Base path** is `/PickTime/` (see `vite.config.ts`, derived from the repo
-  name). If the repo is ever renamed, set repo Actions **variable** `VITE_BASE`
-  to `/<new-name>/`, or the deployed asset paths break.
+To manually trigger the holiday sync: GitHub → Actions → Sync Holidays → Run workflow.
+To deploy edge function manually: GitHub → Actions → Deploy Edge Functions → Run workflow.
+**Base path** is `/PickTime/` (hardcoded in `vite.config.ts`). If the repo is ever renamed,
+set repo Actions **variable** `VITE_BASE` to `/<new-name>/`.
+
+---
 
 ## Project structure
 
 ```
-supabase/migrations/   SQL — run these in the Supabase SQL editor in order
-  0001_init.sql          tables, indexes, RLS, auth/room RPCs, triggers, cleanup
-  0002_fix_search_path   points functions at the `extensions` schema (pgcrypto)
-  0003_unavailability    불참/탈퇴 status columns + RPCs (date/self/leave/kick)
-  0004_reactivate_...    triggers: participating action clears 전체 불참
-  0005_write_guards...   candidate_votes.room_id (realtime scoping) + BEFORE
-                         INSERT guards: block writes when room finalized or
-                         actor has left/been kicked
-  0006_sessions_...      participant_sessions table (multiple concurrent
-                         sessions per participant — login on a 2nd device no
-                         longer logs out the 1st) + update_room_settings drops
-  0007_holidays.sql      holidays table (RLS public read; populated by batch)
-  0008_transfer_host     transfer_host RPC (host → admin, promote another)
-  0009_finalize_allday   finalized_date column + finalize_room_allday RPC
-  0010_multi_finalize    finalized_options jsonb column + finalize_room_multi RPC
-                         out-of-range candidates/votes and notifies on range
-                         change
+.github/workflows/
+  deploy.yml              GitHub Pages deploy (push to main)
+  sync-holidays.yml       Weekly holiday batch (공공데이터포털 → Supabase)
+  deploy-functions.yml    Supabase Edge Function deploy
+
+supabase/
+  migrations/             Run in order in Supabase SQL Editor
+    0001_init.sql         Tables, RLS, core RPCs, triggers, cleanup jobs
+    0002_fix_search_path  pgcrypto search_path fix (extensions schema)
+    0003_unavailability   불참/탈퇴 status columns + RPCs
+    0004_reactivate_...   Trigger: participating action clears 전체 불참
+    0005_write_guards...  candidate_votes.room_id + BEFORE INSERT guards
+    0006_sessions_...     participant_sessions (multi-device), update_room_settings
+    0007_holidays.sql     holidays table (RLS: public read only)
+    0008_transfer_host    transfer_host RPC
+    0009_finalize_allday  rooms.finalized_date + finalize_room_allday RPC
+    0010_multi_finalize   rooms.finalized_options jsonb + finalize_room_multi RPC
+  functions/
+    share/index.ts        Edge Function: dynamic OG tags + redirect (Deno)
+
+scripts/
+  sync-holidays.mjs       Holiday batch script (Node.js, ESM)
+  make-og.mjs             OG card generator (sharp + SVG)
+
+public/
+  favicon.svg             App icon (SVG)
+  pwa-192x192.png         PWA home screen icon
+  pwa-512x512.png         PWA splash/maskable icon
+  og-card.png             Static KakaoTalk/social preview (1200×630)
+
 src/
-  lib/        supabase client, types, api (RPC/query wrappers), aggregate
-              (vote/all-day/불참 tallying + rankings), dayjs(KST), colors
-              (Lab ΔE palette), utils (cn, sortSupporters), queryClient
-  store/      session.ts — zustand, per-room session persisted to localStorage
-  hooks/      useRoomData (loads room + room-scoped realtime), useNotifications,
-              useRoomActions (all writes: optimistic + login-gated)
+  lib/
+    supabase.ts           Supabase client (anon key, realtime config)
+    types.ts              Domain types (Room, Participant, Session, FinalizedOption, …)
+    api.ts                All Supabase RPC/query wrappers (fetchRoom, finalizeRoomMulti, …)
+    aggregate.ts          Vote tallying: tallyForDate, rankCandidates, rankPromising
+    dayjs.ts              dayjs with KST timezone, todayStr(), nowKST()
+    colors.ts             Participant color palette + CIE Lab ΔE distance
+    holidays.ts           fetchYearHolidays() → reads from Supabase holidays table
+    kakao.ts              shareRoom() and shareResult() via Kakao SDK
+    queryClient.ts        TanStack Query client + query key factory (qk.*)
+    utils.ts              cn(), fmtRange(), sortSupporters()
+  store/
+    session.ts            Zustand store: sessions keyed by roomId, persisted to
+                          localStorage. Session shape: roomId, participantId, token,
+                          nickname, color, role, roomTitle?, joinedAt?
+  hooks/
+    useRoomData.ts        Loads room + all related data + Realtime subscriptions
+    useRoomActions.ts     All write actions: optimistic UI + login-gate
+    useNotifications.ts   Per-participant notification count + list
+    useHolidays.ts        TanStack Query wrapper for fetchYearHolidays (24h cache)
   components/
-    ui/       button, input, sheet (bottom sheet), dialog, avatar, toast, spinner
-    auth/     AuthProvider (ensureAuth()), LoginSheet (new/existing + PIN)
-    room/     Calendar, CandidateListView, PromisingOptions, DateSheet,
-              TimeRangePicker (drag), VoterAvatars, MembersSheet,
-              NotificationCenter, RoomMenu, PasswordGate
-  pages/      HomePage, CreateRoomPage, RoomPage, NotFoundPage
+    ui/                   button, input, sheet, dialog, avatar, toast, spinner
+    auth/
+      AuthProvider.tsx    Context: session, ensureAuth() (opens login if viewer)
+      LoginSheet.tsx      New participant join + existing participant login flow
+    room/
+      Calendar.tsx        Monthly calendar grid; today highlight; holiday colors;
+                          finalized stars (multi-date); color dots; drag select
+      CandidateListView.tsx  Flat ranked list view of all time candidates
+      PromisingOptions.tsx   Leading options banner (top of room page)
+      DateSheet.tsx       Bottom sheet on date tap: candidates, AllDayRow, comments
+      TimeRangePicker.tsx Drag-to-select time (explicit drag mode toggle to avoid
+                          scroll hijacking) + dropdown fallback
+      VoterAvatars.tsx    Compact avatar cluster, tap → full nickname dialog
+      MembersSheet.tsx    참여 현황 sheet (누가 투표/불참/하루종일)
+      NotificationCenter.tsx  In-app notification panel
+      RoomMenu.tsx        Side sheet menu: share, finalize, participants, settings.
+                          Simplified post-finalization menu (result-share only).
+      PasswordGate.tsx    Password input before entering a locked room
+  pages/
+    HomePage.tsx          Recent rooms list (fetches from Supabase) + new room CTA
+    CreateRoomPage.tsx    Room creation form
+    RoomPage.tsx          Main room view: calendar/list toggle, finalized banner,
+                          realtime session role sync
+    NotFoundPage.tsx      404 fallback
 ```
+
+---
 
 ## Data model (as built)
 
-Tables: `rooms`, `room_secrets`, `participants`, `participant_auth`,
+**Core tables:**
+`rooms`, `room_secrets`, `participants`, `participant_auth`, `participant_sessions`,
 `time_candidates`, `candidate_votes`, `date_availability`, `comments`,
-`notifications`, `audit_logs`. All child tables cascade-delete from `rooms`.
+`notifications`, `audit_logs`, `holidays`
 
-Deviations from the "suggested schema" in Part 1 (intentional):
+All child tables cascade-delete from `rooms`.
 
-- **Secrets are split out.** `password_hash` → `room_secrets`, and
-  `pin_hash` / PIN-attempt / session-token columns → `participant_auth`. These
-  two tables have RLS **on with no policies** (zero anon access) and are **not**
-  in the realtime publication, so bcrypt hashes never reach the client.
-- `participants.status`: `active` | `unavailable` (전체 불참) | `left`
-  (탈퇴/추방 — soft-deleted; row kept so their comments still render, tagged
-  "탈퇴자"; excluded from member lists).
-- `date_availability.status`: `all_day` | `unavailable` (날짜별 불참).
-  (`is_all_day` is kept in sync but `status` is the source of truth.)
+**Key deviations from the Part 1 schema:**
 
-## Auth & security model (important — read before touching auth)
+- **Secrets split out:** `password_hash` → `room_secrets`; `pin_hash` / PIN-attempt /
+  session-token → `participant_auth`. Both have RLS on with no policies (zero anon
+  access) and are excluded from the realtime publication.
+- **`participant_sessions` table** (migration 0006): multiple concurrent sessions
+  per participant (multi-device login). Token stored as SHA-256 hash only.
+- **`participants.status`:** `active` | `unavailable` (전체 불참) | `left`
+- **`date_availability.status`:** `all_day` | `unavailable`. `is_all_day` kept in sync
+  but `status` is the source of truth.
+- **`rooms` extra columns (post-MVP):**
+  - `finalized_date DATE` — set on any finalization (candidate or all-day)
+  - `finalized_options JSONB DEFAULT '[]'` — array of `{kind, candidate_id?, date}`;
+    populated by `finalize_room_multi`. Old rooms finalized before migration 0010
+    have `[]` here — the UI falls back to `finalized_candidate_id`/`finalized_date`.
+- **`holidays` table** — populated by the weekly GitHub Actions batch from the
+  공공데이터포털 API. Schema: `date DATE PK, name TEXT`. RLS: public SELECT only.
+  Writes require service role (bypasses RLS) from the batch script.
 
-- **No Supabase Auth.** Identity = a `participants` row + an opaque session
-  token. On join/login an RPC returns a random token; only its SHA-256 hash is
-  stored in `participant_sessions` (multiple rows per participant — concurrent
-  sessions are allowed; migration 0006). The client keeps the raw token in
-  localStorage (`useSessionStore`) and passes it to privileged RPCs. Leave/kick/
-  PIN-reset delete that participant's session rows to force re-login.
-- **Hashing is server-side** via `pgcrypto` (`crypt`/`gen_salt('bf')`).
-- **pgcrypto lives in the `extensions` schema**, so every SECURITY DEFINER
-  function declares `set search_path = public, extensions`. If you add a new
-  function that calls `crypt`/`digest`/`gen_random_bytes`, you MUST include
-  `extensions` in its search_path or it fails at call time (this was the cause
-  of an early "방 만들기" error — see 0002).
+---
+
+## Auth & security model
+
+- **No Supabase Auth.** Identity = a `participants` row + an opaque session token.
+  On join/login an RPC returns a random token; only its SHA-256 hash is stored in
+  `participant_sessions`. The client keeps the raw token in localStorage
+  (`useSessionStore`) and passes it to privileged RPCs.
+- **Hashing:** server-side via `pgcrypto` (`crypt`/`gen_salt('bf')`).
+- **pgcrypto lives in the `extensions` schema.** Every SECURITY DEFINER function must
+  declare `set search_path = public, extensions`. If you add a new function that
+  calls `crypt`/`digest`/`gen_random_bytes` and forget this, it silently fails at
+  call time with a "function not found" error (see migration 0002).
 - **Two write paths:**
-  - *Everyday* writes (cast/remove vote, add candidate, comment) go straight to
-    tables under permissive room-scoped RLS — fast and realtime-friendly. They
-    are still guarded by BEFORE INSERT triggers (0005) that reject writes to a
-    finalized room or from a `left` participant. Note this path still trusts the
-    client-supplied `participant_id` for active members (acceptable per brief).
-  - *Privileged / fairness-sensitive* actions go through token+role-checked
-    SECURITY DEFINER RPCs: `create_room`, `join_room`, `login_participant`,
-    `verify_room_password`, `edit_candidate` (resets votes + notifies),
-    `delete_candidate`, `finalize_room`, `reopen_room`, `update_room_settings`,
+  - *Everyday writes* (vote, all-day, comment, add candidate): straight to tables via
+    PostgREST under permissive room-scoped RLS. Still guarded by BEFORE INSERT
+    triggers (0005) that reject writes to a finalized room or from a `left` participant.
+  - *Privileged actions* go through token+role-checked SECURITY DEFINER RPCs:
+    `create_room`, `join_room`, `login_participant`, `verify_room_password`,
+    `edit_candidate`, `delete_candidate`, `finalize_room`, `finalize_room_allday`,
+    `finalize_room_multi`, `reopen_room`, `update_room_settings`,
     `rename_participant`, `set_participant_role`, `reset_participant_pin`,
     `delete_room`, `set_date_status`, `set_self_participation`, `leave_room`,
-    `kick_participant`.
+    `kick_participant`, `transfer_host`.
+- **Session role sync:** `RoomPage` watches `data.participants` and auto-updates
+  `session.role` in localStorage if it differs from the DB value — so role changes
+  (e.g. host grants admin) are reflected immediately without refresh.
 
-## Features built beyond / refining Part 1
+---
 
-- **Auto-vote:** creating a time candidate auto-votes the creator for it.
-- **Vote aggregation** (`src/lib/aggregate.ts`): "available all day" supporters
-  count toward every candidate that day, **deduped per participant**
-  (explicit ∪ all-day).
-- **Most Promising Options:** shows only the current leader(s) — all options
-  tied at the max vote count — with **no rank numbers**. Includes a synthetic
-  "하루종일 가능" option for dates that have only all-day marks. The full ranked
-  list is the **시간 후보 목록** (list) view, a flat list sorted
-  **votes desc → 불참 asc → earliest date → earliest time**.
-- **불참 (non-participation):** per-date (이 날 불참, clears that date's votes),
-  whole-room (전체 불참, clears all my votes/marks; auto-cleared by any
-  participating action via 0004 triggers; per-date 불참 is blocked with a notice
-  while whole-room 불참 is active). Fewer 불참 ranks higher on ties.
-- **Members / 참여 현황** (`MembersSheet`, header 👥): anyone can see who voted /
-  didn't / is 불참, and expand a member to see their voted times, all-day dates,
-  and 불참 dates.
-- **Leave / kick:** soft-delete (status `left`); votes removed, comments kept
-  with a 탈퇴자 tag. Host can't leave (must delete the room). Host/admin can kick.
-- **Login anywhere:** viewers can log in from the room menu or the viewer banner
-  (not only when attempting an action).
-- Voter avatars are tap-to-expand (full nicknames + all-day/vote tags);
-  supporter ordering is canonical (`sortSupporters`, by join time) everywhere.
+## Features (complete list)
+
+**Core (from brief):**
+- Monthly calendar with vote heatmap and color dots per participant
+- Date bottom sheet: time candidates, votes, "하루종일 가능", comments
+- "Available all day" aggregation: all-day voters count toward every candidate
+- Most Promising Options banner (leaders only, no rank numbers)
+- 시간 후보 목록 list view (sorted by votes desc → 불참 asc → date/time)
+- 불참: per-date (clears votes) and whole-room (clears everything; auto-cleared on participation)
+- Finalize / reopen room (host or admin)
+- In-app notifications with unread badge
+- Members sheet (참여 현황): who voted / all-day / 불참
+- Leave / kick (soft-delete, comments preserved as "탈퇴자")
+- Role system: host / admin / participant
+- PIN lock: 5 wrong attempts → 5-minute lockout
+
+**Post-MVP additions:**
+- **Today highlight:** primary-color circle on today in the calendar
+- **Holiday highlighting:** Korean public holidays shown in red (data from Supabase `holidays` table; `useHolidays` hook with 24h TanStack Query cache). DateSheet title shows holiday name. Updated weekly via GitHub Actions batch.
+- **Calendar opens at current month** if today is within the room's date range
+- **Weekday header alignment:** fixed grid gap mismatch between header and cells
+- **Drag mode toggle in TimeRangePicker:** explicit "드래그 선택" button prevents scroll hijacking on mobile; drag completes and auto-disables
+- **Vote count badge:** N표/N명 displayed as inline rounded badge (not vertical stack)
+- **AllDayRow in DateSheet:** "하루종일 가능" always shown in candidates section (top when no time candidates, bottom otherwise); "하루종일 확정" label when the date was finalized as all-day; tap avatars to see full nicknames
+- **Multi-finalization:** `finalize_room_multi` RPC + `finalized_options jsonb` on rooms. FinalizeDialog: checkbox multi-select, voter avatars per option, scrollable list. Multiple finalized dates show stars on calendar. "확정" badge per option in DateSheet and CandidateListView.
+- **Finalized banner:** shows all finalized dates with confirmed participant avatars (tap → full nicknames); "하루종일" label where applicable
+- **Post-finalization menu:** simplified to "결과 카카오톡으로 공유" + "방 다시 열기" + participants list (read-only) + delete/logout. Full menu restored on reopen.
+- **KakaoTalk invite share:** `shareRoom()` — room name + description + invite card via Kakao SDK
+- **KakaoTalk result share:** `shareResult()` — "[확정] 방이름 — 대표날짜 외 N개" in title, remaining dates in description. Fallback for rooms finalized before `finalized_options` migration.
+- **OG Edge Function proxy** (`supabase/functions/share/index.ts`): `?room=<id>` → fetches room title → returns HTML with dynamic OG tags + JS redirect. Deployed via `deploy-functions.yml`. "초대 링크 복사" copies the direct app URL (hash routing); the Edge Function URL is not used for copy (CORS issues in browser are avoided this way).
+- **PWA icons:** `pwa-192x192.png` and `pwa-512x512.png` in `/public/`, referenced in `vite.config.ts` VitePWA manifest.
+- **Host transfer:** `transfer_host` RPC (demotes current host to admin, promotes target). 왕관 button in participant row (host only, non-host participants only, not finalized). Confirmation dialog.
+- **Role change confirmation dialog:** ShieldCheck/Shield icon now shows a dialog before changing admin status.
+- **isManager uses DB role:** `me?.role ?? session?.role` so host/admin features activate immediately after role change without refresh.
+- **Session role auto-sync:** RoomPage `useEffect` detects `me.role !== session.role` and updates localStorage. Eliminates the need for refresh after role changes.
+- **Start date constraint:** room creation and room settings cannot set start date before today.
+- **Homepage recent rooms:** reads all stored sessions, fetches room data (title, date range, is_finalized) via TanStack Query. Shows date range, "확정" badge, "만료" badge for deleted/expired rooms with 🗑️ remove button. "새 약속 만들기" CTA at bottom.
+- **Home button:** RoomPage header uses Home icon (instead of back arrow); navigates to `/`.
+
+---
 
 ## Operational gotchas
 
-- **PostgREST schema cache:** after adding/altering an RPC, the Data API may not
-  see it immediately (`PGRST202: Could not find function ... in schema cache`).
-  Fix: run `notify pgrst, 'reload schema';` in the SQL editor (or save any table
-  in the dashboard).
-- **Applying schema changes:** add a new numbered file under
-  `supabase/migrations/` and run it in the Supabase **SQL editor** (there is no
-  automated migration runner wired up). Migrations 0001–0010 are already applied
-  to the live project.
-- **pg_cron auto-cleanup is optional:** `delete_expired_rooms()` is only
-  scheduled if the `pg_cron` extension is enabled (0001 guards this). If it's
-  off, run `select delete_expired_rooms();` manually to purge expired rooms.
-- **All dates/times are KST.** Never use `new Date()` for logic — use the
-  helpers in `src/lib/dayjs.ts`.
-- **Realtime** invalidates React Query caches per room; the secret tables are
-  intentionally excluded from the publication.
+- **PostgREST schema cache:** after adding/altering an RPC, the Data API may not see
+  it immediately (`PGRST202`). Fix: run `notify pgrst, 'reload schema';` in the SQL
+  editor. Migration 0010 ends with this automatically.
+- **Applying schema changes:** add a new numbered file under `supabase/migrations/`
+  and run it in the **Supabase SQL Editor** manually (no automated runner).
+  All migrations 0001–0010 are already applied to the live project.
+- **Holiday API key:** registered at https://data.go.kr → 한국천문연구원 특일정보.
+  The key is a hex string (no special chars, no URL encoding needed). If it stops
+  working, check if the usage approval is still active in 마이페이지 → 활용신청.
+- **Kakao SDK URL:** `https://developers.kakao.com/sdk/js/kakao.min.js` loaded in
+  `index.html`. Domain `https://lonysg.github.io` must be registered in Kakao
+  Developers → 앱 설정 → 플랫폼 → Web for share to work.
+- **`finalize_room` / `finalize_room_allday` RPCs** still exist in the DB but are
+  no longer called from the frontend (replaced by `finalize_room_multi`). Old rooms
+  finalized via these RPCs have `finalized_options = []`; the UI falls back to
+  `finalized_candidate_id` and `finalized_date` for display.
+- **pg_cron auto-cleanup:** `delete_expired_rooms()` only runs if the `pg_cron`
+  extension is enabled (guarded in 0001). If off, run manually in SQL Editor.
+- **All dates/times are KST.** Never use `new Date()` for display/comparison logic —
+  use `nowKST()`, `todayStr()`, `kstDate()` from `src/lib/dayjs.ts`.
+- **Realtime** is room-scoped only. `secret*` tables are excluded from the
+  realtime publication intentionally.
+- **Bundle size:** ~155 KB gzip (single chunk, acceptable for MVP).
+
+---
 
 ## Social preview
 
-`public/og-card.png` (1200×630) is the static KakaoTalk/social card,
-regenerated with `npm run og` (`scripts/make-og.mjs`, renders an SVG via
-`sharp`). `index.html` references it with **absolute** URLs — meta `content` is
-not base-rewritten by Vite, so relative paths 404 on GitHub Pages.
+`public/og-card.png` (1200×630) — static KakaoTalk/social card for the app homepage.
+Regenerate with `npm run og` (`scripts/make-og.mjs`, renders SVG via `sharp`).
+`index.html` references it with **absolute URLs** — relative paths 404 on GitHub Pages
+because Vite does not rewrite `<meta content>` attributes.
 
-## Additional features (added post-MVP)
+For **room-specific** OG (dynamic title), the Edge Function at
+`supabase/functions/share/index.ts` handles it. It is not used by the "링크 복사"
+button (which copies the direct app URL) — only for future use if a custom share
+URL flow is built.
 
-- **PWA PNG icons** — 192×192 and 512×512 added to `/public/`, vite.config updated.
-- **Host transfer** — `transfer_host` RPC + 왕관 버튼 UI.
-- **Korean public holidays** — 공공데이터포털 API → GitHub Actions weekly sync → `holidays` table → `useHolidays` hook. Calendar marks holidays red; DateSheet title includes holiday name.
-- **KakaoTalk share** — `shareRoom()` (invite) and `shareResult()` (confirmed result) via Kakao SDK. Result share includes confirmed dates + "N개 외" format.
-- **Today highlight** — primary-color circle on today's date in the calendar.
-- **Drag mode toggle** — TimeRangePicker requires explicit toggle to avoid hijacking scroll.
-- **Multi-finalization** — `finalize_room_multi` RPC; `finalized_options jsonb[]` on rooms; FinalizeDialog multi-select with voter avatars.
-- **All-day in candidate list** — DateSheet shows `AllDayRow` in candidates section (top when no candidates, bottom otherwise).
-- **Post-finalization menu** — simplified to result-share + reopen only; "확정" badge on calendar finalized dates; per-option confirmed-member avatars in finalized banner.
-- **Homepage recent rooms** — sessions store `roomTitle`/`joinedAt`; HomePage fetches room data with date range and "확정"/"만료" badges; expired rooms show delete button.
-- **Session role sync** — RoomPage auto-syncs `session.role` from DB on participants load (no refresh needed after role change).
+---
 
-## TODO / not done
+## TODO / known gaps
 
-- Bundle is a single ~155 KB-gzip chunk (fine for MVP; could code-split later).
-- Host transfer flow (host can delete room but not transfer — if host goes inactive, no one can manage).
+- Bundle is a single ~155 KB-gzip chunk. Could code-split lazily later.
+- No self-service PIN change. Users must ask host/admin to reset their PIN.
+- If the host goes inactive permanently, no one can manage the room (host transfer exists but host must initiate it themselves).
