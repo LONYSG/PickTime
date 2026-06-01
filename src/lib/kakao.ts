@@ -24,6 +24,8 @@ export function shareRoom(roomId: string, title: string) {
       title,
       description: '링크 열고 바로 투표 · 로그인 없이 확인',
       imageUrl: 'https://lonysg.github.io/PickTime/og-card.png',
+      imageWidth: 1200,
+      imageHeight: 630,
       link: { mobileWebUrl: url, webUrl: url },
     },
     buttons: [{ title: '지금 참여하기', link: { mobileWebUrl: url, webUrl: url } }],
