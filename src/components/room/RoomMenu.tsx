@@ -46,6 +46,7 @@ import {
 import { useSessionStore } from '@/store/session';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { shareRoom, shareResult } from '@/lib/kakao';
+import { VoterAvatars } from './VoterAvatars';
 import type { PromisingOption } from '@/lib/aggregate';
 import type { CandidateVote, Participant, Room, Session, TimeCandidate } from '@/lib/types';
 
@@ -76,6 +77,7 @@ export function RoomMenu({
   const me = session ? participants.find((p) => p.id === session.participantId) : undefined;
   const myRole = me?.role ?? session?.role;
   const isManager = myRole === 'host' || myRole === 'admin';
+  const participantsById = new Map(participants.map((p) => [p.id, p]));
   const [finalizing, setFinalizing] = useState(false);
 
   const refreshRoom = () => qc.invalidateQueries({ queryKey: qk.room(room.id) });
@@ -267,6 +269,7 @@ export function RoomMenu({
       {finalizing && session && (
         <FinalizeDialog
           promising={promising}
+          participantsById={participantsById}
           onClose={() => setFinalizing(false)}
           onConfirm={async (selected) => {
             try {
@@ -609,10 +612,12 @@ function RoomSettingsForm({
 
 function FinalizeDialog({
   promising,
+  participantsById,
   onClose,
   onConfirm,
 }: {
   promising: PromisingOption[];
+  participantsById: Map<string, Participant>;
   onClose: () => void;
   onConfirm: (selected: Set<string>) => void;
 }) {
@@ -638,21 +643,32 @@ function FinalizeDialog({
               key={opt.id}
               onClick={() => toggle(opt.id)}
               className={cn(
-                'flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99]',
+                'flex w-full flex-col gap-2 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99]',
                 checked ? 'border-primary bg-primary/10' : 'border-border bg-card',
               )}
             >
-              <span className="font-semibold">
-                {dayjs(opt.date).format('M/D (ddd)')}
-                {opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}` : ' · 하루종일'}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-primary">{opt.total}표</span>
-                <span className={cn('grid h-5 w-5 place-items-center rounded-full border-2 transition',
-                  checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
-                  {checked && <CheckCircle2 className="h-3 w-3" />}
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">
+                  {dayjs(opt.date).format('M/D (ddd)')}
+                  {opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}` : ' · 하루종일'}
                 </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                    {opt.total}표
+                  </span>
+                  <span className={cn('grid h-5 w-5 place-items-center rounded-full border-2 transition',
+                    checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
+                    {checked && <CheckCircle2 className="h-3 w-3" />}
+                  </span>
+                </div>
               </div>
+              {opt.supporterIds.length > 0 && (
+                <VoterAvatars
+                  supporters={opt.supporterIds.map((id) => participantsById.get(id)).filter(Boolean) as Participant[]}
+                  explicitIds={opt.supporterIds}
+                  title={`${dayjs(opt.date).format('M/D (ddd)')}${opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}` : ' · 하루종일'} · 투표자`}
+                />
+              )}
             </button>
           );
         })}
