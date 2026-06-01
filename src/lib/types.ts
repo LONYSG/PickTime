@@ -9,6 +9,12 @@ export type ParticipantStatus = 'active' | 'unavailable' | 'left';
 
 export type AvailabilityStatus = 'all_day' | 'unavailable';
 
+export interface FinalizedOption {
+  kind: 'candidate' | 'allday';
+  candidate_id?: string;
+  date: string;
+}
+
 export interface Room {
   id: string;
   title: string;
@@ -19,6 +25,7 @@ export interface Room {
   is_finalized: boolean;
   finalized_candidate_id: string | null;
   finalized_date: string | null; // YYYY-MM-DD
+  finalized_options: FinalizedOption[];
   created_at: string;
   last_activity_at: string;
 }

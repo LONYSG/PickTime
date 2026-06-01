@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
+import { Pencil } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Lightweight take on the Google-Calendar-style drag-to-create gesture.
-// A vertical 30-min slot track: press and drag to paint a time band. A manual
-// start/end <select> is always available as a fallback. Kept deliberately
-// simple — no momentum, no fine gestures.
+// Drag mode must be explicitly enabled so vertical scroll is never hijacked.
 
 const START_HOUR = 6;
 const END_HOUR = 24;
@@ -24,8 +24,8 @@ export function TimeRangePicker({
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ anchor: number; current: number } | null>(null);
+  const [dragMode, setDragMode] = useState(false);
 
-  // Derive selected slot band from value (in minutes) for the overlay.
   const selStartSlot = value ? (toMin(value.start) - START_HOUR * 60) / 30 : null;
   const selEndSlot = value ? (toMin(value.end) - START_HOUR * 60) / 30 : null;
 
@@ -37,7 +37,7 @@ export function TimeRangePicker({
 
   const commit = (a: number, b: number) => {
     const lo = Math.min(a, b);
-    const hi = Math.max(a, b) + 1; // inclusive end slot
+    const hi = Math.max(a, b) + 1;
     onChange({ start: toTimeStr(slotToMinutes(lo)), end: toTimeStr(slotToMinutes(hi)) });
   };
 
@@ -50,23 +50,41 @@ export function TimeRangePicker({
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">시간 선택</span>
+        <button
+          type="button"
+          onClick={() => { setDragMode((v) => !v); setDrag(null); }}
+          className={cn(
+            'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition',
+            dragMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          <Pencil className="h-3 w-3" />
+          {dragMode ? '드래그 완료' : '드래그 선택'}
+        </button>
+      </div>
+
       <div
         ref={trackRef}
         className="relative select-none overflow-hidden rounded-2xl border border-border bg-card"
-        style={{ height: SLOTS * SLOT_PX, touchAction: 'none' }}
-        onPointerDown={(e) => {
+        style={{
+          height: SLOTS * SLOT_PX,
+          touchAction: dragMode ? 'none' : 'pan-y',
+        }}
+        onPointerDown={dragMode ? (e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           const s = slotFromY(e.clientY);
           setDrag({ anchor: s, current: s });
-        }}
-        onPointerMove={(e) => {
+        } : undefined}
+        onPointerMove={dragMode ? (e) => {
           if (!drag) return;
           setDrag((d) => (d ? { ...d, current: slotFromY(e.clientY) } : d));
-        }}
-        onPointerUp={() => {
-          if (drag) commit(drag.anchor, drag.current);
+        } : undefined}
+        onPointerUp={dragMode ? () => {
+          if (drag) { commit(drag.anchor, drag.current); setDragMode(false); }
           setDrag(null);
-        }}
+        } : undefined}
       >
         {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
           <div
@@ -91,11 +109,15 @@ export function TimeRangePicker({
             </span>
           </div>
         )}
-      </div>
 
-      <p className="text-center text-xs text-muted-foreground">
-        위 영역을 드래그하거나 아래에서 직접 선택하세요
-      </p>
+        {!dragMode && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="rounded-xl bg-background/70 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
+              드래그 선택 버튼을 누르면 드래그로 선택할 수 있어요
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         <TimeSelect

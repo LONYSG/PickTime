@@ -12,6 +12,30 @@ function init() {
   k.init(KEY);
 }
 
+export function shareResult(
+  roomId: string,
+  title: string,
+  lines: string[], // e.g. ["6월 5일 (금) · 18:00–20:00", "6월 6일 (토) · 하루종일"]
+) {
+  init();
+  const k = window.Kakao;
+  if (!k?.Share) return;
+
+  const url = `${window.location.origin}${window.location.pathname}#/room/${roomId}`;
+  k.Share.sendDefault({
+    objectType: 'feed',
+    content: {
+      title: `[확정] ${title}`,
+      description: lines.join('\n'),
+      imageUrl: 'https://lonysg.github.io/PickTime/og-card.png',
+      imageWidth: 1200,
+      imageHeight: 630,
+      link: { mobileWebUrl: url, webUrl: url },
+    },
+    buttons: [{ title: '결과 보기', link: { mobileWebUrl: url, webUrl: url } }],
+  });
+}
+
 export function shareRoom(roomId: string, title: string) {
   init();
   const k = window.Kakao;

@@ -68,6 +68,11 @@ export default function RoomPage() {
   const finalizedDate = room.is_finalized
     ? (finalized?.candidate.date ?? room.finalized_date ?? null)
     : null;
+  const finalizedDates = room.is_finalized
+    ? (room.finalized_options?.length
+        ? room.finalized_options.map((o) => o.date)
+        : finalizedDate ? [finalizedDate] : [])
+    : [];
 
   return (
     <AuthProvider roomId={room.id} participants={data.participants}>
@@ -123,17 +128,20 @@ export default function RoomPage() {
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {/* Finalized banner */}
-          {room.is_finalized && finalizedDate && (
-            <div className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-400 p-4 text-white shadow-soft">
-              <CheckCircle2 className="h-7 w-7 shrink-0" />
-              <div>
+          {room.is_finalized && finalizedDates.length > 0 && (
+            <div className="flex items-start gap-3 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-400 p-4 text-white shadow-soft">
+              <CheckCircle2 className="h-7 w-7 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium opacity-90">일정이 확정됐어요</p>
-                <p className="font-bold">
-                  {dayjs(finalizedDate).format('M월 D일 (ddd)')}
-                  {finalized
-                    ? ` · ${fmtRange(finalized.candidate.start_time, finalized.candidate.end_time)}`
-                    : ' · 하루종일'}
-                </p>
+                {(room.finalized_options?.length ? room.finalized_options : [{ kind: 'allday' as const, date: finalizedDate! }]).map((opt, i) => {
+                  const d = dayjs(opt.date).format('M월 D일 (ddd)');
+                  const cand = ranked.find((r) => r.candidate.id === opt.candidate_id);
+                  return (
+                    <p key={i} className="font-bold">
+                      {d}{cand ? ` · ${fmtRange(cand.candidate.start_time, cand.candidate.end_time)}` : ' · 하루종일'}
+                    </p>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -175,6 +183,7 @@ export default function RoomPage() {
                 participantCount={activeParticipants.length}
                 participantsById={participantsById}
                 finalizedDate={finalizedDate}
+                finalizedDates={finalizedDates}
                 readOnly={room.is_finalized}
                 onPick={setPickedDate}
               />

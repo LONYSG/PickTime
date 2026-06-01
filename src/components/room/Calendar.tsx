@@ -17,7 +17,8 @@ interface CalendarProps {
   heat: Map<string, DateHeat>;
   participantCount: number;
   participantsById: Map<string, Participant>;
-  finalizedDate: string | null;
+  finalizedDate: string | null; // kept for single-finalize compat
+  finalizedDates?: string[];
   readOnly: boolean;
   onPick: (date: string) => void;
 }
@@ -39,9 +40,11 @@ export function Calendar({
   participantCount,
   participantsById,
   finalizedDate,
+  finalizedDates,
   readOnly,
   onPick,
 }: CalendarProps) {
+  const finalSet = new Set(finalizedDates ?? (finalizedDate ? [finalizedDate] : []));
   const start = dayjs(rangeStart);
   const end = dayjs(rangeEnd);
   const [month, setMonth] = useState(() => start.startOf('month'));
@@ -143,7 +146,7 @@ export function Calendar({
           const info = heat.get(ds);
           const ratio = info && participantCount ? info.supporterIds.length / participantCount : 0;
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
-          const isFinal = finalizedDate === ds;
+          const isFinal = finalSet.has(ds);
           const isToday = ds === today;
           const isHol = isHoliday(ds) !== null;
           const isSelected = multi && selected.has(ds);

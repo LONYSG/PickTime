@@ -362,3 +362,14 @@ export async function finalizeRoomAllDay(token: string, date: string) {
   });
   if (error) throw error;
 }
+
+export async function finalizeRoomMulti(
+  token: string,
+  options: Array<{ kind: 'candidate' | 'allday'; candidate_id?: string; date: string }>,
+) {
+  const { error } = await supabase.rpc('finalize_room_multi', {
+    p_token: token,
+    p_options: options,
+  });
+  if (error) throw error;
+}
