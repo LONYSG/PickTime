@@ -78,8 +78,7 @@ export function RoomMenu({
   const refreshParticipants = () => qc.invalidateQueries({ queryKey: qk.participants(room.id) });
 
   async function copyLink() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-    const url = `${supabaseUrl}/functions/v1/share?room=${room.id}`;
+    const url = `${window.location.origin}${window.location.pathname}#/room/${room.id}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success('링크를 복사했어요!');
