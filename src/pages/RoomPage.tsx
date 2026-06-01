@@ -163,12 +163,14 @@ export default function RoomPage() {
           {view === 'calendar' ? (
             <>
               <Calendar
+                roomId={room.id}
                 rangeStart={room.date_range_start}
                 rangeEnd={room.date_range_end}
                 heat={heat}
                 participantCount={activeParticipants.length}
                 participantsById={participantsById}
                 finalizedDate={finalized?.candidate.date ?? null}
+                readOnly={room.is_finalized}
                 onPick={setPickedDate}
               />
               <Legend />

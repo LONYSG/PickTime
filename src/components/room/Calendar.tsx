@@ -1,19 +1,23 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, CalendarPlus, Check } from 'lucide-react';
 import { dayjs } from '@/lib/dayjs';
 import { cn, sortSupporters } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useRoomActions } from '@/hooks/useRoomActions';
 import type { DateHeat } from '@/lib/aggregate';
 import type { Participant } from '@/lib/types';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 interface CalendarProps {
+  roomId: string;
   rangeStart: string;
   rangeEnd: string;
   heat: Map<string, DateHeat>;
   participantCount: number;
   participantsById: Map<string, Participant>;
   finalizedDate: string | null;
+  readOnly: boolean;
   onPick: (date: string) => void;
 }
 
@@ -27,17 +31,25 @@ function heatClass(ratio: number): string {
 }
 
 export function Calendar({
+  roomId,
   rangeStart,
   rangeEnd,
   heat,
   participantCount,
   participantsById,
   finalizedDate,
+  readOnly,
   onPick,
 }: CalendarProps) {
   const start = dayjs(rangeStart);
   const end = dayjs(rangeEnd);
   const [month, setMonth] = useState(() => start.startOf('month'));
+  const actions = useRoomActions(roomId);
+
+  // Bulk "available all day" selection mode.
+  const [multi, setMulti] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [applying, setApplying] = useState(false);
 
   const canPrev = month.isAfter(start.startOf('month'));
   const canNext = month.isBefore(end.startOf('month'));
@@ -47,6 +59,18 @@ export function Calendar({
     const gridStart = firstOfMonth.subtract(firstOfMonth.day(), 'day');
     return Array.from({ length: 42 }, (_, i) => gridStart.add(i, 'day'));
   }, [month]);
+
+  const cancel = () => {
+    setMulti(false);
+    setSelected(new Set());
+  };
+
+  async function apply() {
+    setApplying(true);
+    await actions.setMyDatesAllDay(Array.from(selected));
+    setApplying(false);
+    cancel();
+  }
 
   return (
     <div className="rounded-3xl bg-card p-3 shadow-soft">
@@ -70,6 +94,36 @@ export function Calendar({
         </button>
       </div>
 
+      {/* Bulk all-day toolbar */}
+      {!readOnly &&
+        (multi ? (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
+            <span className="text-xs font-semibold text-primary">
+              {selected.size}일 선택 · 날짜를 탭하세요
+            </span>
+            <div className="flex items-center gap-2">
+              <button onClick={cancel} className="text-xs font-medium text-muted-foreground">
+                취소
+              </button>
+              <Button
+                size="sm"
+                className="h-8 px-3 text-xs"
+                disabled={selected.size === 0 || applying}
+                onClick={apply}
+              >
+                하루종일 표시
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setMulti(true)}
+            className="mb-2 flex w-full items-center justify-center gap-1 rounded-xl bg-muted/60 py-1.5 text-xs font-semibold text-primary active:scale-[0.99]"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" /> 여러 날 한번에 하루종일 가능
+          </button>
+        ))}
+
       <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-muted-foreground">
         {WEEKDAYS.map((d, i) => (
           <div key={d} className={cn(i === 0 && 'text-rose-400', i === 6 && 'text-sky-400')}>
@@ -87,6 +141,7 @@ export function Calendar({
           const ratio = info && participantCount ? info.supporterIds.length / participantCount : 0;
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
           const isFinal = finalizedDate === ds;
+          const isSelected = multi && selected.has(ds);
           const dots = sortSupporters(
             (info?.supporterIds ?? [])
               .map((id) => participantsById.get(id))
@@ -99,7 +154,18 @@ export function Calendar({
             <button
               key={ds}
               disabled={!inRange}
-              onClick={() => inRange && onPick(ds)}
+              onClick={() => {
+                if (!inRange) return;
+                if (multi) {
+                  setSelected((prev) => {
+                    const n = new Set(prev);
+                    n.has(ds) ? n.delete(ds) : n.add(ds);
+                    return n;
+                  });
+                } else {
+                  onPick(ds);
+                }
+              }}
               className={cn(
                 'relative flex aspect-square flex-col items-center rounded-xl p-1 text-sm transition',
                 inRange
@@ -112,6 +178,7 @@ export function Calendar({
                 inRange ? 'active:scale-95' : 'cursor-default',
                 !inMonth && 'opacity-40',
                 isFinal && 'ring-2 ring-amber-400',
+                isSelected && 'bg-primary/15 ring-2 ring-primary',
               )}
             >
               <span
@@ -124,6 +191,13 @@ export function Calendar({
               >
                 {isFinal ? <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> : d.date()}
               </span>
+
+              {isSelected && (
+                <span className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                  <Check className="h-2.5 w-2.5" />
+                </span>
+              )}
+
               {dots.length > 0 ? (
                 <span className="mt-auto flex flex-wrap items-center justify-center gap-0.5">
                   {dots.map((c, i) => (
@@ -142,7 +216,6 @@ export function Calendar({
               ) : (
                 inRange &&
                 hasCandidates && (
-                  // Candidates exist but nobody has voted yet — still flag the day.
                   <span className="mt-auto h-1.5 w-1.5 rounded-full border border-indigo-300" />
                 )
               )}

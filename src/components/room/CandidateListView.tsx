@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Check, ChevronRight, CalendarX2, Sun } from 'lucide-react';
+import { Check, CalendarX2, Sun } from 'lucide-react';
 import { VoterAvatars } from './VoterAvatars';
 import { dayjs } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
@@ -14,30 +14,14 @@ import type {
   TimeCandidate,
 } from '@/lib/types';
 
-// One row in the flat list: a real time candidate, or an "all-day only" date.
 type Row =
-  | {
-      kind: 'candidate';
-      total: number;
-      unavailable: number;
-      date: string;
-      sortTime: string;
-      tally: CandidateTally;
-    }
-  | {
-      kind: 'allday';
-      total: number;
-      unavailable: number;
-      date: string;
-      sortTime: string;
-      parts: Participant[];
-    };
+  | { kind: 'candidate'; total: number; unavailable: number; date: string; sortTime: string; tally: CandidateTally }
+  | { kind: 'allday'; total: number; unavailable: number; date: string; sortTime: string; parts: Participant[] };
 
 /**
  * Flat overview of every voting option in the room, sorted by votes (desc) then
- * earliest date/time. This is the "see everything" view — browse and vote on
- * existing options without proposing anything new. Dates that only have
- * "available all day" marks appear as their own all-day row.
+ * fewest 불참, then earliest date/time. Browse and vote without proposing
+ * anything new. Dates with only "available all day" marks appear as all-day rows.
  */
 export function CandidateListView({
   room,
@@ -73,14 +57,7 @@ export function CandidateListView({
       ).length;
       if (tallies.length > 0) {
         for (const t of tallies) {
-          out.push({
-            kind: 'candidate',
-            total: t.total,
-            unavailable: t.unavailableCount,
-            date,
-            sortTime: t.candidate.start_time,
-            tally: t,
-          });
+          out.push({ kind: 'candidate', total: t.total, unavailable, date, sortTime: t.candidate.start_time, tally: t });
         }
       } else {
         const parts = availability
@@ -115,15 +92,16 @@ export function CandidateListView({
     <div className="space-y-2">
       {rows.map((row) => {
         const d = dayjs(row.date);
-        const dateLabel = (
+        const dateCol = (
           <button
             onClick={() => onOpenDate(row.date)}
-            className="flex items-center gap-1 text-left active:opacity-70"
+            className="w-11 shrink-0 text-center active:opacity-70"
+            aria-label={`${d.format('M월 D일')} 자세히`}
           >
-            <span className="text-sm font-bold">{d.format('M/D')}</span>
+            <span className="block text-sm font-bold leading-tight">{d.format('M/D')}</span>
             <span
               className={cn(
-                'text-xs',
+                'block text-[11px] leading-tight',
                 d.day() === 0 && 'text-rose-500',
                 d.day() === 6 && 'text-sky-500',
                 d.day() !== 0 && d.day() !== 6 && 'text-muted-foreground',
@@ -131,14 +109,11 @@ export function CandidateListView({
             >
               {d.format('ddd')}
             </span>
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         );
 
         if (row.kind === 'allday') {
-          const iAmAllDay = !!(
-            session && row.parts.some((p) => p.id === session.participantId)
-          );
+          const iAmAllDay = !!(session && row.parts.some((p) => p.id === session.participantId));
           return (
             <div
               key={`allday-${row.date}`}
@@ -149,20 +124,19 @@ export function CandidateListView({
                 onClick={() => actions.setMyDateStatus(row.date, iAmAllDay ? 'none' : 'all_day')}
                 className={cn(
                   'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95',
-                  iAmAllDay
-                    ? 'border-amber-400 bg-amber-400 text-white'
-                    : 'border-amber-300 bg-card text-amber-500',
+                  iAmAllDay ? 'border-amber-400 bg-amber-400 text-white' : 'border-amber-300 bg-card text-amber-500',
                   readOnly && 'opacity-60',
                 )}
                 aria-label="하루종일 가능 표시"
               >
                 <Sun className="h-5 w-5" />
               </button>
+              {dateCol}
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {dateLabel}
-                  <span className="font-bold">하루종일 가능</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-semibold">하루종일 가능</span>
                   {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
+                  <CountPill total={row.total} tone="amber" />
                 </div>
                 <div className="mt-1">
                   <VoterAvatars
@@ -172,7 +146,6 @@ export function CandidateListView({
                   />
                 </div>
               </div>
-              <Count total={row.total} tone="amber" />
             </div>
           );
         }
@@ -197,28 +170,22 @@ export function CandidateListView({
               onClick={() => actions.toggleVote(t.candidate.id, voted)}
               className={cn(
                 'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95',
-                voted
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground',
+                voted ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground',
                 readOnly && 'opacity-60',
               )}
               aria-label="투표"
             >
               <Check className="h-5 w-5" />
             </button>
-
+            {dateCol}
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {dateLabel}
-                <span className="font-bold">
-                  {fmtRange(t.candidate.start_time, t.candidate.end_time)}
-                </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-bold">{fmtRange(t.candidate.start_time, t.candidate.end_time)}</span>
                 {isFinal && (
-                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">
-                    확정
-                  </span>
+                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">확정</span>
                 )}
                 {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
+                <CountPill total={t.total} />
               </div>
               <div className="mt-1">
                 <VoterAvatars
@@ -228,8 +195,6 @@ export function CandidateListView({
                 />
               </div>
             </div>
-
-            <Count total={t.total} />
           </div>
         );
       })}
@@ -239,24 +204,20 @@ export function CandidateListView({
 
 function UnavailBadge({ n }: { n: number }) {
   return (
-    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">
-      불참 {n}
-    </span>
+    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">불참 {n}</span>
   );
 }
 
-function Count({ total, tone = 'primary' }: { total: number; tone?: 'primary' | 'amber' }) {
+function CountPill({ total, tone = 'primary' }: { total: number; tone?: 'primary' | 'amber' }) {
   return (
-    <div className="flex flex-col items-center pl-1">
-      <span
-        className={cn(
-          'text-lg font-extrabold leading-none',
-          tone === 'amber' ? 'text-amber-600' : 'text-primary',
-        )}
-      >
-        {total}
-      </span>
-      <span className="text-[10px] text-muted-foreground">표</span>
-    </div>
+    <span
+      className={cn(
+        'ml-auto inline-flex shrink-0 items-baseline gap-0.5 rounded-full px-2.5 py-0.5 text-sm font-bold',
+        tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary',
+      )}
+    >
+      {total}
+      <span className="text-[10px] font-semibold opacity-80">표</span>
+    </span>
   );
 }

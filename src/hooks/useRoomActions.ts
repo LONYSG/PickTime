@@ -90,6 +90,39 @@ export function useRoomActions(roomId: string) {
     }
   }
 
+  /** Mark several dates "available all day" at once. */
+  async function setMyDatesAllDay(dates: string[]) {
+    if (dates.length === 0) return;
+    const s = await ensureAuth();
+    const key = qk.availability(roomId);
+    const prev = qc.getQueryData<DateAvailability[]>(key) ?? [];
+    qc.setQueryData<DateAvailability[]>(key, (old = []) => {
+      const without = old.filter(
+        (a) => !(dates.includes(a.date) && a.participant_id === s.participantId),
+      );
+      const added: DateAvailability[] = dates.map((date) => ({
+        id: `optimistic-${date}`,
+        room_id: roomId,
+        date,
+        participant_id: s.participantId,
+        is_all_day: true,
+        status: 'all_day',
+        created_at: new Date().toISOString(),
+      }));
+      return [...without, ...added];
+    });
+    try {
+      await Promise.all(dates.map((d) => setDateStatus(s.token, d, 'all_day')));
+      toast.success(`${dates.length}일을 하루종일 가능으로 표시했어요.`);
+    } catch (e) {
+      qc.setQueryData(key, prev);
+      toast.error(friendlyError(e));
+    } finally {
+      qc.invalidateQueries({ queryKey: key });
+      qc.invalidateQueries({ queryKey: qk.participants(roomId) });
+    }
+  }
+
   /** Whole-room 불참 toggle (clears my votes/marks when turning on). */
   async function setMyParticipation(unavailable: boolean) {
     const s = await ensureAuth();
@@ -155,6 +188,7 @@ export function useRoomActions(roomId: string) {
   return {
     toggleVote,
     setMyDateStatus,
+    setMyDatesAllDay,
     setMyParticipation,
     createCandidate,
     updateCandidate,
