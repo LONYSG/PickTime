@@ -466,3 +466,170 @@ Keep synchronization **lightweight and room-scoped**. Do not subscribe to global
 
 The ideal outcome:
 > "Friends open the link and immediately start coordinating — no explanation needed."
+
+---
+---
+
+# PART 2 — Implementation Status & Maintenance Handoff
+
+> Everything above is the original product brief. Everything below documents
+> what was **actually built**, where it lives, and how to maintain it from a
+> fresh machine / new session. Keep this section updated as the app evolves.
+
+## Status snapshot (last updated 2026-06-01)
+
+- **Status:** Built and deployed (MVP feature-complete, live in production).
+- **Live site:** https://lonysg.github.io/PickTime/
+- **Repo:** https://github.com/LONYSG/PickTime (public, owner `LONYSG`)
+- **Supabase project ref:** `yttvmtomohvxnradchol`
+  (URL `https://yttvmtomohvxnradchol.supabase.co`)
+- **Auto-deploy:** push to `main` → GitHub Actions builds and deploys to Pages.
+
+## Run it on a fresh machine
+
+```bash
+git clone https://github.com/LONYSG/PickTime.git
+cd PickTime
+npm install
+cp .env.example .env.local      # then fill in the two values below
+npm run dev                      # http://localhost:5173/PickTime/
+```
+
+`.env.local` (gitignored — never committed) needs:
+
+```
+VITE_SUPABASE_URL=https://yttvmtomohvxnradchol.supabase.co
+VITE_SUPABASE_ANON_KEY=<the publishable client key>
+```
+
+Get the key from **Supabase dashboard → Project Settings → API** (it's the
+`sb_publishable_...` / anon public key — client-safe by design; it already
+ships in the public JS bundle). The same two values are stored as GitHub
+Actions secrets for the deploy build.
+
+Useful scripts: `npm run build` (typecheck + production build — the CI gate),
+`npm run typecheck`, `npm run dev`, `npm run preview`.
+
+## Deploy flow
+
+Commit and push to `main`; `.github/workflows/deploy.yml` builds with the
+secrets and publishes to GitHub Pages. Watch with `gh run watch`.
+
+- Pages source = **GitHub Actions** (already configured).
+- Repo Actions **secrets**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+- **Base path** is `/PickTime/` (see `vite.config.ts`, derived from the repo
+  name). If the repo is ever renamed, set repo Actions **variable** `VITE_BASE`
+  to `/<new-name>/`, or the deployed asset paths break.
+
+## Project structure
+
+```
+supabase/migrations/   SQL — run these in the Supabase SQL editor in order
+  0001_init.sql          tables, indexes, RLS, auth/room RPCs, triggers, cleanup
+  0002_fix_search_path   points functions at the `extensions` schema (pgcrypto)
+  0003_unavailability    불참/탈퇴 status columns + RPCs (date/self/leave/kick)
+  0004_reactivate_...    triggers: participating action clears 전체 불참
+src/
+  lib/        supabase client, types, api (RPC/query wrappers), aggregate
+              (vote/all-day/불참 tallying + rankings), dayjs(KST), colors
+              (Lab ΔE palette), utils (cn, sortSupporters), queryClient
+  store/      session.ts — zustand, per-room session persisted to localStorage
+  hooks/      useRoomData (loads room + room-scoped realtime), useNotifications,
+              useRoomActions (all writes: optimistic + login-gated)
+  components/
+    ui/       button, input, sheet (bottom sheet), dialog, avatar, toast, spinner
+    auth/     AuthProvider (ensureAuth()), LoginSheet (new/existing + PIN)
+    room/     Calendar, CandidateListView, PromisingOptions, DateSheet,
+              TimeRangePicker (drag), VoterAvatars, MembersSheet,
+              NotificationCenter, RoomMenu, PasswordGate
+  pages/      HomePage, CreateRoomPage, RoomPage, NotFoundPage
+```
+
+## Data model (as built)
+
+Tables: `rooms`, `room_secrets`, `participants`, `participant_auth`,
+`time_candidates`, `candidate_votes`, `date_availability`, `comments`,
+`notifications`, `audit_logs`. All child tables cascade-delete from `rooms`.
+
+Deviations from the "suggested schema" in Part 1 (intentional):
+
+- **Secrets are split out.** `password_hash` → `room_secrets`, and
+  `pin_hash` / PIN-attempt / session-token columns → `participant_auth`. These
+  two tables have RLS **on with no policies** (zero anon access) and are **not**
+  in the realtime publication, so bcrypt hashes never reach the client.
+- `participants.status`: `active` | `unavailable` (전체 불참) | `left`
+  (탈퇴/추방 — soft-deleted; row kept so their comments still render, tagged
+  "탈퇴자"; excluded from member lists).
+- `date_availability.status`: `all_day` | `unavailable` (날짜별 불참).
+  (`is_all_day` is kept in sync but `status` is the source of truth.)
+
+## Auth & security model (important — read before touching auth)
+
+- **No Supabase Auth.** Identity = a `participants` row + an opaque session
+  token. On join/login an RPC returns a random token; only its SHA-256 hash is
+  stored in `participant_auth`. The client keeps the raw token in localStorage
+  (`useSessionStore`) and passes it to privileged RPCs.
+- **Hashing is server-side** via `pgcrypto` (`crypt`/`gen_salt('bf')`).
+- **pgcrypto lives in the `extensions` schema**, so every SECURITY DEFINER
+  function declares `set search_path = public, extensions`. If you add a new
+  function that calls `crypt`/`digest`/`gen_random_bytes`, you MUST include
+  `extensions` in its search_path or it fails at call time (this was the cause
+  of an early "방 만들기" error — see 0002).
+- **Two write paths:**
+  - *Everyday* writes (cast/remove vote, add candidate, comment) go straight to
+    tables under permissive room-scoped RLS — fast and realtime-friendly.
+  - *Privileged / fairness-sensitive* actions go through token+role-checked
+    SECURITY DEFINER RPCs: `create_room`, `join_room`, `login_participant`,
+    `verify_room_password`, `edit_candidate` (resets votes + notifies),
+    `delete_candidate`, `finalize_room`, `reopen_room`, `update_room_settings`,
+    `rename_participant`, `set_participant_role`, `reset_participant_pin`,
+    `delete_room`, `set_date_status`, `set_self_participation`, `leave_room`,
+    `kick_participant`.
+
+## Features built beyond / refining Part 1
+
+- **Auto-vote:** creating a time candidate auto-votes the creator for it.
+- **Vote aggregation** (`src/lib/aggregate.ts`): "available all day" supporters
+  count toward every candidate that day, **deduped per participant**
+  (explicit ∪ all-day).
+- **Most Promising Options:** shows only the current leader(s) — all options
+  tied at the max vote count — with **no rank numbers**. Includes a synthetic
+  "하루종일 가능" option for dates that have only all-day marks. The full ranked
+  list is the **시간 후보 목록** (list) view, a flat list sorted
+  **votes desc → 불참 asc → earliest date → earliest time**.
+- **불참 (non-participation):** per-date (이 날 불참, clears that date's votes),
+  whole-room (전체 불참, clears all my votes/marks; auto-cleared by any
+  participating action via 0004 triggers; per-date 불참 is blocked with a notice
+  while whole-room 불참 is active). Fewer 불참 ranks higher on ties.
+- **Members / 참여 현황** (`MembersSheet`, header 👥): anyone can see who voted /
+  didn't / is 불참, and expand a member to see their voted times, all-day dates,
+  and 불참 dates.
+- **Leave / kick:** soft-delete (status `left`); votes removed, comments kept
+  with a 탈퇴자 tag. Host can't leave (must delete the room). Host/admin can kick.
+- **Login anywhere:** viewers can log in from the room menu or the viewer banner
+  (not only when attempting an action).
+- Voter avatars are tap-to-expand (full nicknames + all-day/vote tags);
+  supporter ordering is canonical (`sortSupporters`, by join time) everywhere.
+
+## Operational gotchas
+
+- **PostgREST schema cache:** after adding/altering an RPC, the Data API may not
+  see it immediately (`PGRST202: Could not find function ... in schema cache`).
+  Fix: run `notify pgrst, 'reload schema';` in the SQL editor (or save any table
+  in the dashboard).
+- **Applying schema changes:** add a new numbered file under
+  `supabase/migrations/` and run it in the Supabase **SQL editor** (there is no
+  automated migration runner wired up). Migrations 0001–0004 are already applied
+  to the live project.
+- **pg_cron auto-cleanup is optional:** `delete_expired_rooms()` is only
+  scheduled if the `pg_cron` extension is enabled (0001 guards this). If it's
+  off, run `select delete_expired_rooms();` manually to purge expired rooms.
+- **All dates/times are KST.** Never use `new Date()` for logic — use the
+  helpers in `src/lib/dayjs.ts`.
+- **Realtime** invalidates React Query caches per room; the secret tables are
+  intentionally excluded from the publication.
+
+## TODO / not done
+
+- Proper PWA PNG icons (currently an SVG icon only; see `vite.config.ts`).
+- Bundle is a single ~155 KB-gzip chunk (fine for MVP; could code-split later).
