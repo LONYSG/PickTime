@@ -418,12 +418,9 @@ function AllDayRow({
             />
           </div>
         </div>
-        <div className="flex flex-col items-center pl-1">
-          <span className="text-xl font-extrabold leading-none text-amber-600">
-            {participants.length}
-          </span>
-          <span className="text-[10px] text-muted-foreground">명</span>
-        </div>
+        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-sm font-bold text-amber-700">
+          {participants.length}명
+        </span>
       </div>
     </div>
   );
