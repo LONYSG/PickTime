@@ -159,6 +159,7 @@ export function RoomMenu({
                 p={p}
                 room={room}
                 session={session}
+                me={me}
                 onChanged={refreshParticipants}
               />
             ))}
@@ -279,14 +280,17 @@ function ParticipantRow({
   p,
   room,
   session,
+  me,
   onChanged,
 }: {
   p: Participant;
   room: Room;
   session: Session | undefined;
+  me: Participant | undefined;
   onChanged: () => void;
 }) {
-  const canManage = (session?.role === 'host' || session?.role === 'admin') && p.role !== 'host';
+  const myRole = me?.role ?? session?.role;
+  const canManage = (myRole === 'host' || myRole === 'admin') && p.role !== 'host';
   const [editing, setEditing] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [kicking, setKicking] = useState(false);
@@ -347,7 +351,7 @@ function ParticipantRow({
             >
               <KeyRound className="h-4 w-4" />
             </button>
-            {session?.role === 'host' && !isMe && (
+            {myRole === 'host' && !isMe && (
               <button
                 onClick={() => setTransferring(true)}
                 className="grid h-8 w-8 place-items-center rounded-full text-amber-500 hover:bg-card"
