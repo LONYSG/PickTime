@@ -529,6 +529,9 @@ supabase/migrations/   SQL — run these in the Supabase SQL editor in order
   0002_fix_search_path   points functions at the `extensions` schema (pgcrypto)
   0003_unavailability    불참/탈퇴 status columns + RPCs (date/self/leave/kick)
   0004_reactivate_...    triggers: participating action clears 전체 불참
+  0005_write_guards...   candidate_votes.room_id (realtime scoping) + BEFORE
+                         INSERT guards: block writes when room finalized or
+                         actor has left/been kicked
 src/
   lib/        supabase client, types, api (RPC/query wrappers), aggregate
               (vote/all-day/불참 tallying + rankings), dayjs(KST), colors
@@ -577,7 +580,10 @@ Deviations from the "suggested schema" in Part 1 (intentional):
   of an early "방 만들기" error — see 0002).
 - **Two write paths:**
   - *Everyday* writes (cast/remove vote, add candidate, comment) go straight to
-    tables under permissive room-scoped RLS — fast and realtime-friendly.
+    tables under permissive room-scoped RLS — fast and realtime-friendly. They
+    are still guarded by BEFORE INSERT triggers (0005) that reject writes to a
+    finalized room or from a `left` participant. Note this path still trusts the
+    client-supplied `participant_id` for active members (acceptable per brief).
   - *Privileged / fairness-sensitive* actions go through token+role-checked
     SECURITY DEFINER RPCs: `create_room`, `join_room`, `login_participant`,
     `verify_room_password`, `edit_candidate` (resets votes + notifies),
@@ -629,7 +635,15 @@ Deviations from the "suggested schema" in Part 1 (intentional):
 - **Realtime** invalidates React Query caches per room; the secret tables are
   intentionally excluded from the publication.
 
+## Social preview
+
+`public/og-card.png` (1200×630) is the static KakaoTalk/social card,
+regenerated with `npm run og` (`scripts/make-og.mjs`, renders an SVG via
+`sharp`). `index.html` references it with **absolute** URLs — meta `content` is
+not base-rewritten by Vite, so relative paths 404 on GitHub Pages.
+
 ## TODO / not done
 
 - Proper PWA PNG icons (currently an SVG icon only; see `vite.config.ts`).
+- Host transfer (host can't leave; an inactive host can't be replaced).
 - Bundle is a single ~155 KB-gzip chunk (fine for MVP; could code-split later).
