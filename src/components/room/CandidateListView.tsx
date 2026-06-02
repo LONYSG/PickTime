@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Check, CalendarX2, Sun } from 'lucide-react';
 import { VoterAvatars } from './VoterAvatars';
+import { VoteMeta } from './VoteMeta';
 import { dayjs } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
 import { tallyForDate, type CandidateTally } from '@/lib/aggregate';
@@ -134,18 +135,19 @@ export function CandidateListView({
                   >
                     <Sun className="h-5 w-5" />
                   </span>
-                  <span className="whitespace-nowrap font-semibold">하루종일 가능</span>
-                  {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
-                  <CountPill total={row.total} tone="amber" />
+                  <span className="min-w-0 flex-1 break-keep text-sm font-semibold leading-snug">
+                    하루종일 가능
+                  </span>
+                  <VoteMeta total={row.total} unavailable={row.unavailable} tone="amber" />
                 </button>
               </div>
-              <div className="border-t border-amber-200/70 bg-amber-50/60 px-3 py-2">
-                <VoterAvatars
-                  supporters={row.parts}
-                  explicitIds={[]}
-                  title={`${d.format('M/D')} 하루종일 가능 · ${row.total}명`}
-                />
-              </div>
+              <VoterAvatars
+                full
+                className="border-t border-amber-200/70 bg-amber-50/60 px-3 py-2.5"
+                supporters={row.parts}
+                explicitIds={[]}
+                title={`${d.format('M/D')} 하루종일 가능 · ${row.total}명`}
+              />
             </div>
           );
         }
@@ -182,24 +184,20 @@ export function CandidateListView({
                 >
                   <Check className="h-5 w-5" />
                 </span>
-                <span className="whitespace-nowrap text-[13px] font-bold">
+                <span className="min-w-0 flex-1 break-keep text-sm font-bold leading-snug">
                   {fmtRange(t.candidate.start_time, t.candidate.end_time)}
                 </span>
-                {isFinal && (
-                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">확정</span>
-                )}
-                {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
-                <CountPill total={t.total} />
+                <VoteMeta total={t.total} unavailable={row.unavailable} isFinal={isFinal} />
               </button>
             </div>
             {supporters.length > 0 && (
-              <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
-                <VoterAvatars
-                  supporters={supporters}
-                  explicitIds={t.explicitVoterIds}
-                  title={`${d.format('M/D')} ${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
-                />
-              </div>
+              <VoterAvatars
+                full
+                className="border-t border-border/60 bg-muted/30 px-3 py-2.5"
+                supporters={supporters}
+                explicitIds={t.explicitVoterIds}
+                title={`${d.format('M/D')} ${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
+              />
             )}
           </div>
         );
@@ -208,22 +206,3 @@ export function CandidateListView({
   );
 }
 
-function UnavailBadge({ n }: { n: number }) {
-  return (
-    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">불참 {n}</span>
-  );
-}
-
-function CountPill({ total, tone = 'primary' }: { total: number; tone?: 'primary' | 'amber' }) {
-  return (
-    <span
-      className={cn(
-        'ml-auto inline-flex shrink-0 items-baseline gap-0.5 rounded-full px-2.5 py-0.5 text-sm font-bold',
-        tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary',
-      )}
-    >
-      {total}
-      <span className="text-[10px] font-semibold opacity-80">표</span>
-    </span>
-  );
-}

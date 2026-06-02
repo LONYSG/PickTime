@@ -244,7 +244,7 @@ function Chip({
   onClick?: () => void;
 }) {
   const cls = cn(
-    'whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium',
+    'break-keep rounded-lg px-2 py-1 text-xs font-medium',
     tone === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-card text-foreground',
     onClick && 'active:scale-95',
   );

@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/input';
 import { Avatar } from '@/components/ui/avatar';
 import { TimeWheelPicker } from './TimeWheelPicker';
 import { VoterAvatars } from './VoterAvatars';
+import { VoteMeta } from './VoteMeta';
 import { toast } from '@/components/ui/toast';
 import { dayjs, nowKST, todayStr } from '@/lib/dayjs';
 import { useHolidays } from '@/hooks/useHolidays';
@@ -267,35 +268,21 @@ export function DateSheet({
                   >
                     <Check className="h-5 w-5" />
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                    <span className="whitespace-nowrap font-bold">
-                      {fmtRange(t.candidate.start_time, t.candidate.end_time)}
-                    </span>
-                    {isFinal && (
-                      <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">
-                        확정
-                      </span>
-                    )}
-                    {t.unavailableCount > 0 && (
-                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">
-                        불참 {t.unavailableCount}
-                      </span>
-                    )}
+                  <span className="min-w-0 flex-1 break-keep text-sm font-bold leading-snug">
+                    {fmtRange(t.candidate.start_time, t.candidate.end_time)}
                   </span>
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
-                    {t.total}표
-                  </span>
+                  <VoteMeta total={t.total} unavailable={t.unavailableCount} isFinal={isFinal} />
                 </button>
 
-                {/* Separate zone: tap avatars to see who voted */}
+                {/* Separate zone: tap anywhere here to see who voted */}
                 {supporters.length > 0 && (
-                  <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
-                    <VoterAvatars
-                      supporters={supporters}
-                      explicitIds={t.explicitVoterIds}
-                      title={`${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
-                    />
-                  </div>
+                  <VoterAvatars
+                    full
+                    className="border-t border-border/60 bg-muted/30 px-3 py-2.5"
+                    supporters={supporters}
+                    explicitIds={t.explicitVoterIds}
+                    title={`${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
+                  />
                 )}
 
                 {/* owner/admin controls */}

@@ -68,18 +68,13 @@ export function PromisingOptions({
                 <span className="block text-[11px] opacity-80">{d.format('ddd')}</span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                <span className="block break-keep text-sm font-semibold leading-snug">
                   {o.kind === 'allday' ? (
                     <span className="inline-flex items-center gap-1">
                       <Sun className="h-3.5 w-3.5" /> 하루종일
                     </span>
                   ) : (
-                    <span className="whitespace-nowrap">{fmtRange(o.start_time!, o.end_time)}</span>
-                  )}
-                  {o.unavailableCount > 0 && (
-                    <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
-                      불참 {o.unavailableCount}
-                    </span>
+                    fmtRange(o.start_time!, o.end_time)
                   )}
                 </span>
                 <span className="mt-1 flex items-center gap-1">
@@ -92,9 +87,16 @@ export function PromisingOptions({
                   ))}
                 </span>
               </span>
-              <span className="flex shrink-0 items-baseline gap-1 rounded-2xl bg-white/20 px-3 py-1.5">
-                <span className="text-xl font-extrabold leading-none">{o.total}</span>
-                <span className="text-[11px] opacity-80">표</span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className="flex items-baseline gap-1 rounded-2xl bg-white/20 px-3 py-1.5">
+                  <span className="text-xl font-extrabold leading-none">{o.total}</span>
+                  <span className="text-[11px] opacity-80">표</span>
+                </span>
+                {o.unavailableCount > 0 && (
+                  <span className="rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold">
+                    불참 {o.unavailableCount}
+                  </span>
+                )}
               </span>
             </button>
           );

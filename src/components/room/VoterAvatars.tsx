@@ -1,22 +1,27 @@
 import { useState } from 'react';
-import { Sun, Check } from 'lucide-react';
+import { Sun, Check, ChevronRight } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { Dialog } from '@/components/ui/dialog';
-import { sortSupporters } from '@/lib/utils';
+import { cn, sortSupporters } from '@/lib/utils';
 import type { Participant } from '@/lib/types';
 
 /**
- * Compact supporter avatar cluster. Tap to open a list showing each voter's
- * full nickname, with a tag for whether they voted directly or via "all day".
+ * Supporter avatar cluster. Tap to open a list showing each voter's full
+ * nickname, with a tag for whether they voted directly or via "all day".
+ * `full` makes the trigger a full-width row (whole zone tappable).
  */
 export function VoterAvatars({
   supporters,
   explicitIds,
   title,
+  full,
+  className,
 }: {
   supporters: Participant[];
   explicitIds: string[];
   title?: string;
+  full?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ordered = sortSupporters(supporters);
@@ -33,15 +38,27 @@ export function VoterAvatars({
           e.stopPropagation();
           setOpen(true);
         }}
-        className="flex flex-wrap items-center gap-1 rounded-lg active:opacity-70"
+        className={cn(
+          full
+            ? 'flex w-full items-center gap-2 active:opacity-80'
+            : 'flex flex-wrap items-center gap-1 rounded-lg active:opacity-70',
+          className,
+        )}
         aria-label="투표한 사람 보기"
       >
-        {ordered.slice(0, 8).map((p) => (
-          <Avatar key={p.id} nickname={p.nickname} color={p.color_hex} size="sm" />
-        ))}
-        {ordered.length > 8 && (
-          <span className="text-[10px] font-medium text-muted-foreground">
-            +{ordered.length - 8}
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {ordered.slice(0, 8).map((p) => (
+            <Avatar key={p.id} nickname={p.nickname} color={p.color_hex} size="sm" />
+          ))}
+          {ordered.length > 8 && (
+            <span className="text-[10px] font-medium text-muted-foreground">
+              +{ordered.length - 8}
+            </span>
+          )}
+        </span>
+        {full && (
+          <span className="flex shrink-0 items-center text-[11px] font-medium text-muted-foreground">
+            명단 <ChevronRight className="h-3.5 w-3.5" />
           </span>
         )}
       </button>
