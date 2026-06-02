@@ -1,30 +1,36 @@
 // Participant color system.
-// Colors are a participant's visual fingerprint, so candidates must be
-// pleasant (never too bright/dark/washed-out) AND maximally distinct from
-// colors already taken in the room. We rank a curated palette by perceptual
-// distance (CIE Lab ΔE) from existing colors and return the most distinct.
+// A color is a participant's visual fingerprint. We auto-assign one — no manual
+// picking — choosing randomly among palette colors that are perceptually
+// distinct (CIE Lab ΔE) from those already taken, so a room ends up with a
+// varied, well-spread set rather than clustering near one hue.
 
-// Curated palette: saturated-but-soft, readable on white, distinct hues.
-export const PALETTE = [
-  '#ef4444', // red
-  '#f97316', // orange
-  '#f59e0b', // amber
-  '#eab308', // yellow
-  '#84cc16', // lime
-  '#22c55e', // green
-  '#10b981', // emerald
-  '#14b8a6', // teal
-  '#06b6d4', // cyan
-  '#0ea5e9', // sky
-  '#3b82f6', // blue
-  '#6366f1', // indigo
-  '#8b5cf6', // violet
-  '#a855f7', // purple
-  '#d946ef', // fuchsia
-  '#ec4899', // pink
-  '#f43f5e', // rose
-  '#78716c', // stone
-] as const;
+function hslToHex(h: number, s: number, l: number): string {
+  const sn = s / 100;
+  const ln = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sn * Math.min(ln, 1 - ln);
+  const f = (n: number) => {
+    const c = ln - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(255 * c)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// ~90 pleasant colors: 30 hues × 3 tone tiers, plus a few neutrals. All read
+// fine on white, with text contrast handled by readableTextOn().
+const TONE_TIERS = [
+  { s: 68, l: 52 }, // vivid
+  { s: 55, l: 43 }, // deep
+  { s: 62, l: 64 }, // soft
+];
+export const PALETTE: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 0; h < 360; h += 12) for (const t of TONE_TIERS) out.push(hslToHex(h, t.s, t.l));
+  out.push('#64748b', '#78716c', '#6b7280'); // slate / stone / gray
+  return out;
+})();
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -62,33 +68,29 @@ export function colorDistance(a: string, b: string): number {
   return Math.sqrt((l1 - l2) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2);
 }
 
+const DISTINCT_THRESHOLD = 22; // min ΔE from existing colors to count as "distinct"
+
 /**
- * Return `count` color candidates from the palette, excluding ones already
- * taken, ordered so the most perceptually distinct from existing colors come
- * first. With no existing colors, returns a spread-out default selection.
+ * Auto-assign one color, avoiding those already taken. Picks randomly among
+ * palette colors that are perceptually distinct from every existing color (so
+ * the room stays varied); falls back to the most-distinct available color, then
+ * to any palette color, when the room is crowded.
  */
-export function suggestColors(taken: string[], count = 5): string[] {
+export function pickColor(taken: string[]): string {
   const takenLower = taken.map((c) => c.toLowerCase());
-  const available = PALETTE.filter((c) => !takenLower.includes(c.toLowerCase()));
+  const fresh = PALETTE.filter((c) => !takenLower.includes(c.toLowerCase()));
+  const pool = fresh.length ? fresh : PALETTE;
+  const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 
-  if (takenLower.length === 0) {
-    // Evenly sample across the palette for variety.
-    const step = Math.max(1, Math.floor(available.length / count));
-    const picks: string[] = [];
-    for (let i = 0; i < available.length && picks.length < count; i += step) {
-      picks.push(available[i]);
-    }
-    return picks.slice(0, count);
-  }
+  if (takenLower.length === 0) return rand(pool);
 
-  return available
-    .map((c) => ({
-      c,
-      score: Math.min(...takenLower.map((t) => colorDistance(c, t))),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, count)
-    .map((x) => x.c);
+  const scored = pool.map((c) => ({
+    c,
+    score: Math.min(...takenLower.map((t) => colorDistance(c, t))),
+  }));
+  const distinct = scored.filter((x) => x.score >= DISTINCT_THRESHOLD).map((x) => x.c);
+  if (distinct.length) return rand(distinct);
+  return scored.sort((a, b) => b.score - a.score)[0].c;
 }
 
 /** Whether a color reads better with white vs dark text on top. */

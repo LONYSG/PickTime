@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Plus,
   Sun,
@@ -11,13 +11,14 @@ import {
   Send,
 } from 'lucide-react';
 import { Sheet } from '@/components/ui/sheet';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { Avatar } from '@/components/ui/avatar';
-import { TimeRangePicker } from './TimeRangePicker';
+import { TimeWheelPicker } from './TimeWheelPicker';
 import { VoterAvatars } from './VoterAvatars';
 import { toast } from '@/components/ui/toast';
-import { dayjs } from '@/lib/dayjs';
+import { dayjs, nowKST, todayStr } from '@/lib/dayjs';
 import { useHolidays } from '@/hooks/useHolidays';
 import { fmtRange, cn } from '@/lib/utils';
 import { tallyForDate } from '@/lib/aggregate';
@@ -61,18 +62,25 @@ export function DateSheet({
   const readOnly = room.is_finalized;
   const open = date !== null;
 
+  // Retain the last opened date so content stays put while the sheet slides out.
+  const [displayDate, setDisplayDate] = useState<string | null>(date);
+  useEffect(() => {
+    if (date) setDisplayDate(date);
+  }, [date]);
+  const activeDate = date ?? displayDate;
+
   const tallies = useMemo(
-    () => (date ? tallyForDate(candidates, votes, availability, date) : []),
-    [candidates, votes, availability, date],
+    () => (activeDate ? tallyForDate(candidates, votes, availability, activeDate) : []),
+    [candidates, votes, availability, activeDate],
   );
   const dateComments = useMemo(
-    () => (date ? comments.filter((c) => c.date === date) : []),
-    [comments, date],
+    () => (activeDate ? comments.filter((c) => c.date === activeDate) : []),
+    [comments, activeDate],
   );
 
   const myRow =
-    date && session
-      ? availability.find((a) => a.date === date && a.participant_id === session.participantId)
+    activeDate && session
+      ? availability.find((a) => a.date === activeDate && a.participant_id === session.participantId)
       : undefined;
   const myAllDay = myRow?.status === 'all_day';
   const myUnavailable = myRow?.status === 'unavailable';
@@ -80,23 +88,25 @@ export function DateSheet({
   const meUnavailableAll =
     !!session && participantsById.get(session.participantId)?.status === 'unavailable';
 
-  const getHoliday = useHolidays(date ? dayjs(date).year() : dayjs().year());
+  const getHoliday = useHolidays(activeDate ? dayjs(activeDate).year() : dayjs().year());
 
-  if (!date) return null;
-  const d = dayjs(date);
+  if (!activeDate) return null;
+  const d = dayjs(activeDate);
 
   // 이 날짜가 하루종일로 확정됐는지 확인
   const finalizedAllDay = room.finalized_options?.find(
-    (o) => o.kind === 'allday' && o.date === date,
+    (o) => o.kind === 'allday' && o.date === activeDate,
   );
 
   // 하루종일 표시 참여자 (항상 계산)
   const allDayParticipants = availability
-    .filter((a) => a.date === date && a.status === 'all_day')
+    .filter((a) => a.date === activeDate && a.status === 'all_day')
     .map((a) => participantsById.get(a.participant_id))
     .filter(Boolean) as Participant[];
 
-  const holidayName = getHoliday(date);
+  const holidayName = getHoliday(activeDate);
+  const titleColor =
+    holidayName || d.day() === 0 ? 'text-rose-500' : d.day() === 6 ? 'text-sky-500' : '';
 
   return (
     <Sheet
@@ -106,14 +116,21 @@ export function DateSheet({
         setEditingId(null);
         onClose();
       }}
-      title={holidayName ? `${d.format('M월 D일 (ddd)')} · ${holidayName}` : d.format('M월 D일 (ddd)')}
+      title={
+        <span className={titleColor}>
+          {d.format('M월 D일 (ddd)')}
+          {holidayName ? ` · ${holidayName}` : ''}
+        </span>
+      }
     >
       <div className="space-y-5 pb-4">
         {/* My status for this date: all-day / unavailable */}
         {!readOnly && (
+          <section className="space-y-2">
+          <h3 className="text-sm font-bold text-muted-foreground">이 날 내 상태</h3>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => actions.setMyDateStatus(date, myAllDay ? 'none' : 'all_day')}
+              onClick={() => actions.setMyDateStatus(activeDate, myAllDay ? 'none' : 'all_day')}
               className={cn(
                 'flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-center transition active:scale-[0.99]',
                 myAllDay ? 'border-amber-300 bg-amber-50' : 'border-border bg-card',
@@ -136,7 +153,7 @@ export function DateSheet({
                   toast.info('이미 이 약속 전체 불참 상태예요. 날짜별 불참은 전체 불참을 해제한 뒤 사용하세요.');
                   return;
                 }
-                actions.setMyDateStatus(date, myUnavailable ? 'none' : 'unavailable');
+                actions.setMyDateStatus(activeDate, myUnavailable ? 'none' : 'unavailable');
               }}
               className={cn(
                 'flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-center transition active:scale-[0.99]',
@@ -156,27 +173,21 @@ export function DateSheet({
               <span className="text-[11px] text-muted-foreground">투표 취소돼요</span>
             </button>
           </div>
+          </section>
         )}
 
         {/* Candidates */}
         <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-muted-foreground">{readOnly ? '시간 결과' : '시간 후보'}</h3>
-            {!readOnly && !adding && (
-              <button
-                onClick={() => setAdding(true)}
-                className="flex items-center gap-1 text-sm font-semibold text-primary"
-              >
-                <Plus className="h-4 w-4" /> 추가
-              </button>
-            )}
-          </div>
+          <h3 className="text-sm font-bold text-muted-foreground">
+            {readOnly ? '시간 결과' : '시간 후보'}
+          </h3>
 
           {adding && (
             <AddCandidate
+              dateStr={activeDate}
               onCancel={() => setAdding(false)}
               onSubmit={async (start, end) => {
-                await actions.createCandidate(date, start, end);
+                await actions.createCandidate(activeDate, start, end);
                 setAdding(false);
               }}
             />
@@ -191,10 +202,10 @@ export function DateSheet({
             />
           )}
 
-          {/* 시간 후보도 없고 하루종일도 없을 때만 empty 메시지 */}
-          {tallies.length === 0 && allDayParticipants.length === 0 && !adding && (
+          {/* 확정된 방인데 시간 후보가 전혀 없을 때 */}
+          {readOnly && tallies.length === 0 && allDayParticipants.length === 0 && (
             <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-              {readOnly ? '이 날은 시간 후보가 없었어요.' : '아직 시간 후보가 없어요. 첫 후보를 추가해 보세요!'}
+              이 날은 시간 후보가 없었어요.
             </p>
           )}
 
@@ -213,9 +224,11 @@ export function DateSheet({
               return (
                 <AddCandidate
                   key={t.candidate.id}
+                  dateStr={activeDate}
                   initial={{ start: t.candidate.start_time, end: t.candidate.end_time }}
                   warn={t.explicitVoterIds.length > 0}
-                  submitLabel="수정"
+                  title="시간 수정"
+                  submitLabel="수정 완료"
                   onCancel={() => setEditingId(null)}
                   onSubmit={async (start, end) => {
                     await actions.updateCandidate(t.candidate.id, start, end);
@@ -229,59 +242,65 @@ export function DateSheet({
               <div
                 key={t.candidate.id}
                 className={cn(
-                  'rounded-2xl border p-3',
+                  'overflow-hidden rounded-2xl border',
                   isFinal ? 'border-amber-300 bg-amber-50' : 'border-border bg-card',
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <button
-                    disabled={readOnly}
-                    onClick={() => actions.toggleVote(t.candidate.id, voted)}
+                {/* Tap anywhere here to vote */}
+                <button
+                  disabled={readOnly}
+                  onClick={() => actions.toggleVote(t.candidate.id, voted)}
+                  className={cn(
+                    'flex w-full items-center gap-3 p-3 text-left transition',
+                    !readOnly && 'active:scale-[0.99]',
+                    voted && !isFinal && 'bg-primary/5',
+                    readOnly && 'opacity-80',
+                  )}
+                >
+                  <span
                     className={cn(
-                      'grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95',
+                      'grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2',
                       voted
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card text-muted-foreground',
-                      readOnly && 'opacity-60',
                     )}
-                    aria-label="투표"
                   >
                     <Check className="h-5 w-5" />
-                  </button>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">
-                        {fmtRange(t.candidate.start_time, t.candidate.end_time)}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                    <span className="whitespace-nowrap font-bold">
+                      {fmtRange(t.candidate.start_time, t.candidate.end_time)}
+                    </span>
+                    {isFinal && (
+                      <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">
+                        확정
                       </span>
-                      {isFinal && (
-                        <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">
-                          확정
-                        </span>
-                      )}
-                      {t.unavailableCount > 0 && (
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">
-                          불참 {t.unavailableCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1">
-                      <VoterAvatars
-                        supporters={supporters}
-                        explicitIds={t.explicitVoterIds}
-                        title={`${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
-                      />
-                    </div>
-                  </div>
-
+                    )}
+                    {t.unavailableCount > 0 && (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">
+                        불참 {t.unavailableCount}
+                      </span>
+                    )}
+                  </span>
                   <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
                     {t.total}표
                   </span>
-                </div>
+                </button>
+
+                {/* Separate zone: tap avatars to see who voted */}
+                {supporters.length > 0 && (
+                  <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
+                    <VoterAvatars
+                      supporters={supporters}
+                      explicitIds={t.explicitVoterIds}
+                      title={`${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
+                    />
+                  </div>
+                )}
 
                 {/* owner/admin controls */}
                 {!readOnly && (isOwner || canDelete || t.candidate.edit_history.length > 0) && (
-                  <div className="mt-2 flex items-center gap-3 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3 border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
                     {isOwner && (
                       <button
                         onClick={() => setEditingId(t.candidate.id)}
@@ -299,8 +318,8 @@ export function DateSheet({
                       </button>
                     )}
                     {t.candidate.edit_history.length > 0 && (
-                      <span className="ml-auto flex items-center gap-1">
-                        <History className="h-3.5 w-3.5" />
+                      <span className="ml-auto flex items-center gap-1 truncate">
+                        <History className="h-3.5 w-3.5 shrink-0" />
                         {t.candidate.edit_history.at(-1)?.change}
                       </span>
                     )}
@@ -318,65 +337,108 @@ export function DateSheet({
               hasCandidates={true}
             />
           )}
+
+          {/* 항상 보이는 시간 추가 버튼 (특정 시간대를 제안) */}
+          {!readOnly && !adding && (
+            <button
+              onClick={() => setAdding(true)}
+              className={cn(
+                'flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 font-semibold text-primary transition active:scale-[0.99]',
+                tallies.length === 0 && allDayParticipants.length === 0 ? 'flex-col gap-1 py-6' : 'py-3.5',
+              )}
+            >
+              <span className="flex items-center gap-1.5">
+                <Plus className="h-5 w-5" /> 시간 후보 추가
+              </span>
+              {tallies.length === 0 && allDayParticipants.length === 0 && (
+                <span className="text-xs font-normal text-primary/70">
+                  가능한 시간대를 제안해보세요 (예: 18:00–20:00)
+                </span>
+              )}
+            </button>
+          )}
         </section>
 
         {/* Comments */}
         <CommentSection
-          date={date}
+          date={activeDate}
           comments={dateComments}
           participantsById={participantsById}
           readOnly={readOnly}
-          onPost={(content) => actions.postComment(date, content)}
+          onPost={(content) => actions.postComment(activeDate, content)}
         />
       </div>
     </Sheet>
   );
 }
 
+/** Current KST time-of-day rounded up to the next 10 minutes, as HH:MM:SS. */
+function defaultStart(): string {
+  const now = nowKST();
+  let h = now.hour();
+  let m = Math.ceil(now.minute() / 10) * 10;
+  if (m >= 60) {
+    m = 0;
+    h = (h + 1) % 24;
+  }
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+}
+
 function AddCandidate({
+  dateStr,
   initial,
   warn,
-  submitLabel = '추가',
+  title = '시간 선택',
+  submitLabel = '설정 완료',
   onSubmit,
   onCancel,
 }: {
-  initial?: { start: string; end: string };
+  dateStr: string;
+  initial?: { start: string; end: string | null };
   warn?: boolean;
+  title?: string;
   submitLabel?: string;
-  onSubmit: (start: string, end: string) => void | Promise<void>;
+  onSubmit: (start: string, end: string | null) => void | Promise<void>;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState<{ start: string; end: string } | null>(
-    initial ?? { start: '18:00:00', end: '20:00:00' },
+  const [value, setValue] = useState<{ start: string; end: string | null }>(
+    initial ?? { start: defaultStart(), end: null },
   );
   const [busy, setBusy] = useState(false);
 
+  async function submit() {
+    if (value.end && value.end <= value.start) {
+      toast.error('종료 시간은 시작 시간보다 늦어야 해요.');
+      return;
+    }
+    if (dateStr === todayStr() && value.start < nowKST().format('HH:mm:ss')) {
+      toast.error('이미 지난 시간은 선택할 수 없어요.');
+      return;
+    }
+    setBusy(true);
+    await onSubmit(value.start, value.end);
+    setBusy(false);
+  }
+
   return (
-    <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-3">
-      {warn && (
-        <p className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
-          이미 투표가 있어요. 수정하면 모든 표가 초기화되고 참가자에게 알림이 가요.
-        </p>
-      )}
-      <TimeRangePicker value={value} onChange={setValue} />
-      <div className="flex gap-2">
+    <Dialog open onClose={onCancel} title={title}>
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+        {warn && (
+          <p className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
+            이미 투표가 있어요. 수정하면 모든 표가 초기화되고 참가자에게 알림이 가요.
+          </p>
+        )}
+        <TimeWheelPicker value={value} onChange={setValue} />
+      </div>
+      <div className="mt-5 flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={onCancel}>
           취소
         </Button>
-        <Button
-          className="flex-1"
-          disabled={!value || busy}
-          onClick={async () => {
-            if (!value) return;
-            setBusy(true);
-            await onSubmit(value.start, value.end);
-            setBusy(false);
-          }}
-        >
+        <Button className="flex-1" disabled={busy} onClick={submit}>
           {submitLabel}
         </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -457,7 +519,7 @@ function CommentSection({
 
       <div className="space-y-2.5">
         {comments.length === 0 && (
-          <p className="text-sm text-muted-foreground">{readOnly ? '댓글이 없어요.' : '가볍게 의견을 남겨보세요.'}</p>
+          <p className="text-sm text-muted-foreground">아직 댓글이 없어요.</p>
         )}
         {comments.map((c) => {
           const p = c.participant_id ? participantsById.get(c.participant_id) : undefined;
@@ -477,7 +539,7 @@ function CommentSection({
                     </span>
                   )}
                   <span className="text-[10px] text-muted-foreground">
-                    {dayjs(c.created_at).format('M/D HH:mm')}
+                    {dayjs(c.created_at).format('M/D A h:mm')}
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm">{c.content}</p>

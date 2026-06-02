@@ -1,7 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface SheetProps {
   open: boolean;
@@ -12,14 +11,33 @@ interface SheetProps {
   footer?: ReactNode;
 }
 
+const CLOSE_THRESHOLD = 90; // px dragged down before release dismisses
+const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+
 /**
- * Mobile-native bottom sheet. Slides up from the bottom, backdrop tap or the
- * close button dismisses. Content scrolls; header/footer stay put. Constrained
- * to the centered mobile column on desktop.
+ * Mobile-native bottom sheet. Slides up on open, slides down on close (backdrop
+ * tap, close button, Escape) and can be flicked down to dismiss. Stays mounted
+ * through the exit transition so the close animation always plays.
  */
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const startYRef = useRef(0);
+
+  // Mount, then animate in on the next frame; animate out when open flips false.
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setMounted(true);
+      const id = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setVisible(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
@@ -27,25 +45,60 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [mounted, onClose]);
 
-  if (!open) return null;
+  if (!mounted) return null;
+
+  const transform = dragging
+    ? `translateY(${dragY}px)`
+    : visible
+      ? 'translateY(0)'
+      : 'translateY(100%)';
+  const dragProgress = Math.min(dragY / 320, 1);
+  const backdropOpacity = visible ? 1 - dragProgress * 0.9 : 0;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div
-        className="absolute inset-0 animate-fade-in bg-black/40"
+        className="absolute inset-0 bg-black/40"
+        style={{ opacity: backdropOpacity, transition: dragging ? 'none' : 'opacity 0.3s ease-out' }}
         onClick={onClose}
         aria-hidden
       />
       <div
         role="dialog"
         aria-modal="true"
-        className={cn(
-          'relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-background shadow-sheet animate-sheet-up',
-        )}
+        className="relative flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-background shadow-sheet"
+        style={{ transform, transition: dragging ? 'none' : `transform 0.3s ${EASE}` }}
+        onTransitionEnd={() => {
+          if (!visible && !dragging) {
+            setMounted(false);
+            setDragY(0);
+          }
+        }}
       >
-        <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-3">
+        {/* Grab handle — drag only here so header buttons stay tappable. */}
+        <div
+          className="shrink-0 cursor-grab touch-none px-5 pb-1 pt-3"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            startYRef.current = e.clientY;
+            setDragging(true);
+          }}
+          onPointerMove={(e) => {
+            if (!dragging) return;
+            setDragY(Math.max(0, e.clientY - startYRef.current));
+          }}
+          onPointerUp={() => {
+            setDragging(false);
+            if (dragY > CLOSE_THRESHOLD) {
+              setVisible(false);
+              onClose();
+            } else {
+              setDragY(0);
+            }
+          }}
+        >
           <div className="mx-auto h-1.5 w-10 rounded-full bg-border" aria-hidden />
         </div>
         {title && (

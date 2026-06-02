@@ -1,14 +1,17 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Home, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users } from 'lucide-react';
+import { Home, Bell, MoreHorizontal, Lock, Sparkles, CheckCircle2, Users, Star } from 'lucide-react';
 import { VoterAvatars } from '@/components/room/VoterAvatars';
 import { useRoomData } from '@/hooks/useRoomData';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSession, useSessionStore } from '@/store/session';
+import { useRecentStore } from '@/store/recent';
 import { heatByDate, rankCandidates, rankPromising } from '@/lib/aggregate';
-import { dayjs } from '@/lib/dayjs';
+import { dayjs, nowKST } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
 import { FullSpinner } from '@/components/ui/spinner';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
 import { Calendar } from '@/components/room/Calendar';
 import { CandidateListView } from '@/components/room/CandidateListView';
@@ -18,6 +21,7 @@ import { NotificationCenter } from '@/components/room/NotificationCenter';
 import { MembersSheet } from '@/components/room/MembersSheet';
 import { RoomMenu } from '@/components/room/RoomMenu';
 import { PasswordGate } from '@/components/room/PasswordGate';
+import { toast } from '@/components/ui/toast';
 import NotFoundPage from './NotFoundPage';
 import type { Participant } from '@/lib/types';
 
@@ -28,11 +32,13 @@ export default function RoomPage() {
   const session = useSession(roomId);
 
   const setSession = useSessionStore((s) => s.setSession);
+  const clearSession = useSessionStore((s) => s.clearSession);
   const [pwOk, setPwOk] = useState(() => !!sessionStorage.getItem(`pt-pw-${roomId}`));
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [homeConfirm, setHomeConfirm] = useState(false);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
 
   const { notifications, unread } = useNotifications(session?.participantId);
@@ -45,6 +51,30 @@ export default function RoomPage() {
       setSession({ ...session, role: me.role });
     }
   }, [data.participants, session?.participantId, session?.role]);
+
+  // Kicked/left while watching → drop the now-invalid session, fall to viewer.
+  useEffect(() => {
+    if (!session || !roomId || !data.participants.length) return;
+    const me = data.participants.find((p) => p.id === session.participantId);
+    if (me?.status === 'left') {
+      clearSession(roomId);
+      toast.info('이 방에서 내보내졌어요. 보기 모드로 전환돼요.');
+    }
+  }, [data.participants, session?.participantId, roomId]);
+
+  // Record the visit so the room stays under "최근 약속" even after logout.
+  const touchRecent = useRecentStore((s) => s.touchRecent);
+  useEffect(() => {
+    if (!roomId || !data.room) return;
+    touchRecent({
+      roomId,
+      title: data.room.title,
+      nickname: session?.nickname,
+      color: session?.color,
+      role: session?.role,
+      visitedAt: nowKST().toISOString(),
+    });
+  }, [roomId, data.room?.title, session?.participantId]);
 
   const participantsById = useMemo(
     () => new Map<string, Participant>(data.participants.map((p) => [p.id, p])),
@@ -87,11 +117,11 @@ export default function RoomPage() {
 
   return (
     <AuthProvider roomId={room.id} roomTitle={room.title} participants={data.participants}>
-      <div className="flex flex-1 flex-col pb-safe">
+      <div className="flex flex-1 animate-page flex-col pb-safe">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/90 px-3 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
           <button
-            onClick={() => nav('/')}
+            onClick={() => setHomeConfirm(true)}
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted"
             aria-label="홈"
           >
@@ -219,7 +249,6 @@ export default function RoomPage() {
                 rangeStart={room.date_range_start}
                 rangeEnd={room.date_range_end}
                 heat={heat}
-                participantCount={activeParticipants.length}
                 participantsById={participantsById}
                 finalizedDate={finalizedDate}
                 finalizedDates={finalizedDates}
@@ -268,6 +297,7 @@ export default function RoomPage() {
           candidates={data.candidates}
           votes={data.votes}
           availability={data.availability}
+          onOpenDate={setPickedDate}
         />
 
         <RoomMenu
@@ -280,6 +310,20 @@ export default function RoomPage() {
           votes={data.votes}
           promising={promising}
         />
+
+        <Dialog open={homeConfirm} onClose={() => setHomeConfirm(false)} title="홈으로 이동할까요?">
+          <p className="text-sm text-muted-foreground">
+            이 약속은 최근 목록에 남아 있어 언제든 다시 들어올 수 있어요.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setHomeConfirm(false)}>
+              취소
+            </Button>
+            <Button className="flex-1" onClick={() => nav('/')}>
+              홈으로
+            </Button>
+          </div>
+        </Dialog>
       </div>
     </AuthProvider>
   );
@@ -302,18 +346,19 @@ function ViewerBanner() {
 
 function Legend() {
   return (
-    <div className="flex items-center justify-center gap-3 pb-4 text-[11px] text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pb-4 text-[11px] text-muted-foreground">
       <span className="flex items-center gap-1">
-        <span className="h-3 w-3 rounded bg-indigo-50 ring-1 ring-border" /> 적음
+        <span className="flex items-center gap-0.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        </span>
+        참여자 색
       </span>
       <span className="flex items-center gap-1">
-        <span className="h-3 w-3 rounded bg-indigo-200" /> 보통
+        <span className="h-3 w-3 rounded bg-primary/5 ring-1 ring-primary/20" /> 가장 많이 모인 날
       </span>
       <span className="flex items-center gap-1">
-        <span className="h-3 w-3 rounded bg-indigo-300" /> 많음
-      </span>
-      <span className="flex items-center gap-1">
-        <span className="h-3 w-3 rounded ring-2 ring-amber-400" /> 확정
+        <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> 확정
       </span>
     </div>
   );

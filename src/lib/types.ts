@@ -52,7 +52,7 @@ export interface TimeCandidate {
   room_id: string;
   date: string; // YYYY-MM-DD
   start_time: string; // HH:MM:SS
-  end_time: string; // HH:MM:SS
+  end_time: string | null; // HH:MM:SS — null when only a start time was set
   created_by: string | null;
   created_at: string;
   edit_history: EditHistoryEntry[];

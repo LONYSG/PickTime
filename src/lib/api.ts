@@ -26,6 +26,7 @@ export function friendlyError(err: unknown): string {
     invalid_status: '잘못된 상태예요.',
     room_finalized: '일정이 확정된 방이에요. 변경하려면 방을 다시 열어야 해요.',
     not_a_member: '더 이상 이 방의 멤버가 아니에요.',
+    wrong_pin: '현재 PIN이 일치하지 않아요.',
   };
   for (const key of Object.keys(map)) if (msg.includes(key)) return map[key];
   return '문제가 발생했어요. 잠시 후 다시 시도해 주세요.';
@@ -162,43 +163,38 @@ export async function loginParticipant(participantId: string, pin: string) {
     | { ok: false; attempts?: number; locked_until?: string };
 }
 
-// ---- Everyday writes (direct tables under permissive RLS) -----------------
+// ---- Everyday writes (token-checked RPCs; caller derived server-side) ------
 
+/** Add a time candidate. The RPC also auto-votes the creator. Returns the row. */
 export async function addCandidate(args: {
-  roomId: string;
+  token: string;
   date: string;
   start: string;
-  end: string;
-  createdBy: string;
+  end: string | null;
 }) {
-  const { data, error } = await supabase
-    .from('time_candidates')
-    .insert({
-      room_id: args.roomId,
-      date: args.date,
-      start_time: args.start,
-      end_time: args.end,
-      created_by: args.createdBy,
-    })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('add_candidate', {
+    p_token: args.token,
+    p_date: args.date,
+    p_start: args.start,
+    p_end: args.end,
+  });
   if (error) throw error;
   return data as TimeCandidate;
 }
 
-export async function castVote(candidateId: string, participantId: string) {
-  const { error } = await supabase
-    .from('candidate_votes')
-    .insert({ candidate_id: candidateId, participant_id: participantId });
+export async function castVote(token: string, candidateId: string) {
+  const { error } = await supabase.rpc('cast_vote', {
+    p_token: token,
+    p_candidate_id: candidateId,
+  });
   if (error) throw error;
 }
 
-export async function removeVote(candidateId: string, participantId: string) {
-  const { error } = await supabase
-    .from('candidate_votes')
-    .delete()
-    .eq('candidate_id', candidateId)
-    .eq('participant_id', participantId);
+export async function removeVote(token: string, candidateId: string) {
+  const { error } = await supabase.rpc('remove_vote', {
+    p_token: token,
+    p_candidate_id: candidateId,
+  });
   if (error) throw error;
 }
 
@@ -212,17 +208,11 @@ export async function setDateStatus(token: string, date: string, status: 'all_da
   if (error) throw error;
 }
 
-export async function addComment(args: {
-  roomId: string;
-  date: string;
-  participantId: string;
-  content: string;
-}) {
-  const { error } = await supabase.from('comments').insert({
-    room_id: args.roomId,
-    date: args.date,
-    participant_id: args.participantId,
-    content: args.content,
+export async function addComment(args: { token: string; date: string; content: string }) {
+  const { error } = await supabase.rpc('add_comment', {
+    p_token: args.token,
+    p_date: args.date,
+    p_content: args.content,
   });
   if (error) throw error;
 }
@@ -246,7 +236,12 @@ export async function markAllNotificationsRead(participantId: string) {
 
 // ---- Privileged RPCs ------------------------------------------------------
 
-export async function editCandidate(token: string, candidateId: string, start: string, end: string) {
+export async function editCandidate(
+  token: string,
+  candidateId: string,
+  start: string,
+  end: string | null,
+) {
   const { error } = await supabase.rpc('edit_candidate', {
     p_token: token,
     p_candidate_id: candidateId,
@@ -295,6 +290,15 @@ export async function setParticipantRole(token: string, targetId: string, role: 
   if (error) throw error;
 }
 
+export async function changePin(token: string, oldPin: string, newPin: string) {
+  const { error } = await supabase.rpc('change_pin', {
+    p_token: token,
+    p_old_pin: oldPin,
+    p_new_pin: newPin,
+  });
+  if (error) throw error;
+}
+
 export async function resetParticipantPin(token: string, targetId: string, newPin: string) {
   const { error } = await supabase.rpc('reset_participant_pin', {
     p_token: token,
@@ -323,6 +327,15 @@ export async function updateRoomSettings(args: {
 
 export async function deleteRoom(token: string) {
   const { error } = await supabase.rpc('delete_room', { p_token: token });
+  if (error) throw error;
+}
+
+/** Host only. Blank/empty password removes protection. */
+export async function setRoomPassword(token: string, password: string | null) {
+  const { error } = await supabase.rpc('set_room_password', {
+    p_token: token,
+    p_password: password && password.length > 0 ? password : null,
+  });
   if (error) throw error;
 }
 

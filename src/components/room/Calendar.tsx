@@ -15,7 +15,6 @@ interface CalendarProps {
   rangeStart: string;
   rangeEnd: string;
   heat: Map<string, DateHeat>;
-  participantCount: number;
   participantsById: Map<string, Participant>;
   finalizedDate: string | null; // kept for single-finalize compat
   finalizedDates?: string[];
@@ -23,21 +22,11 @@ interface CalendarProps {
   onPick: (date: string) => void;
 }
 
-/** Heat bucket → background tint. More distinct supporters = warmer. */
-function heatClass(ratio: number): string {
-  if (ratio <= 0) return 'bg-card';
-  if (ratio < 0.25) return 'bg-indigo-50';
-  if (ratio < 0.5) return 'bg-indigo-100';
-  if (ratio < 0.75) return 'bg-indigo-200';
-  return 'bg-indigo-300';
-}
-
 export function Calendar({
   roomId,
   rangeStart,
   rangeEnd,
   heat,
-  participantCount,
   participantsById,
   finalizedDate,
   finalizedDates,
@@ -65,6 +54,13 @@ export function Calendar({
   const [applying, setApplying] = useState(false);
 
   const today = todayStr();
+  // Most-supported date(s) get a single soft tint so concentration reads at a
+  // glance — without the busy multi-level heat shading.
+  const maxSupporters = useMemo(() => {
+    let m = 0;
+    heat.forEach((h) => (m = Math.max(m, h.supporterIds.length)));
+    return m;
+  }, [heat]);
   const isHoliday = useHolidays(month.year());
   const canPrev = month.isAfter(start.startOf('month'));
   const canNext = month.isBefore(end.startOf('month'));
@@ -98,7 +94,20 @@ export function Calendar({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <span className="font-bold">{month.format('YYYY년 M월')}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-bold">{month.format('YYYY년 M월')}</span>
+          {!month.isSame(start, 'month') &&
+            !nowKST().startOf('month').isBefore(start.startOf('month')) &&
+            !nowKST().startOf('month').isAfter(end.startOf('month')) &&
+            !month.isSame(nowKST(), 'month') && (
+              <button
+                onClick={() => setMonth(nowKST().startOf('month'))}
+                className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-primary"
+              >
+                오늘
+              </button>
+            )}
+        </div>
         <button
           onClick={() => canNext && setMonth(month.add(1, 'month'))}
           disabled={!canNext}
@@ -153,11 +162,13 @@ export function Calendar({
           const inMonth = d.month() === month.month();
           const inRange = !d.isBefore(start, 'day') && !d.isAfter(end, 'day');
           const info = heat.get(ds);
-          const ratio = info && participantCount ? info.supporterIds.length / participantCount : 0;
+          const supporterCount = info?.supporterIds.length ?? 0;
+          const isTop = supporterCount > 0 && supporterCount === maxSupporters;
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
           const isFinal = finalSet.has(ds);
           const isToday = ds === today;
-          const isHol = isHoliday(ds) !== null;
+          const holidayName = isHoliday(ds);
+          const isHol = holidayName !== null;
           const isSelected = multi && selected.has(ds);
           const dots = sortSupporters(
             (info?.supporterIds ?? [])
@@ -184,25 +195,19 @@ export function Calendar({
                 }
               }}
               className={cn(
-                'relative flex aspect-square flex-col items-center rounded-xl p-1 text-sm transition',
-                inRange
-                  ? ratio > 0
-                    ? heatClass(ratio)
-                    : hasCandidates
-                      ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-100'
-                      : 'bg-card'
-                  : 'bg-transparent',
-                inRange ? 'active:scale-95' : 'cursor-default',
-                !inMonth && 'opacity-40',
+                'relative flex aspect-square flex-col items-center gap-0.5 rounded-2xl p-1 text-sm transition',
+                inRange ? (isTop ? 'bg-primary/[0.07]' : 'bg-card hover:bg-muted') : 'bg-transparent',
+                inRange ? 'active:scale-95' : 'pointer-events-none',
+                !inMonth && 'opacity-30',
                 isFinal && 'ring-2 ring-amber-400',
-                isSelected && 'bg-primary/15 ring-2 ring-primary',
+                isSelected && '!bg-primary/15 ring-2 ring-primary',
               )}
             >
               <span
                 className={cn(
-                  'mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold',
+                  'mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-semibold',
                   isToday && inRange
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-soft'
                     : inRange
                       ? 'text-foreground'
                       : 'text-muted-foreground/40',
@@ -220,11 +225,11 @@ export function Calendar({
               )}
 
               {dots.length > 0 ? (
-                <span className="mt-0.5 flex flex-wrap items-center justify-center gap-0.5">
+                <span className="flex flex-wrap items-center justify-center gap-0.5">
                   {dots.map((c, i) => (
                     <span
                       key={i}
-                      className="h-1.5 w-1.5 rounded-full"
+                      className="h-1.5 w-1.5 rounded-full ring-1 ring-black/5"
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -234,12 +239,13 @@ export function Calendar({
                     </span>
                   )}
                 </span>
-              ) : (
-                inRange &&
-                hasCandidates && (
-                  <span className="mt-0.5 h-1.5 w-1.5 rounded-full border border-indigo-300" />
-                )
-              )}
+              ) : inRange && isHol ? (
+                <span className="max-w-full truncate px-0.5 text-[9px] leading-tight text-rose-500">
+                  {holidayName}
+                </span>
+              ) : inRange && hasCandidates ? (
+                <span className="h-1.5 w-1.5 rounded-full border border-indigo-300" />
+              ) : null}
             </button>
           );
         })}

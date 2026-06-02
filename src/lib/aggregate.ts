@@ -123,7 +123,7 @@ export interface PromisingOption {
   id: string; // candidate id, or `allday-<date>`
   date: string;
   start_time?: string;
-  end_time?: string;
+  end_time?: string | null;
   supporterIds: string[];
   total: number;
   unavailableIds: string[];

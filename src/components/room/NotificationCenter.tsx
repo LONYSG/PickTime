@@ -106,7 +106,7 @@ export function NotificationCenter({
                   <span className="block truncate text-sm text-muted-foreground">{n.detail}</span>
                 )}
                 <span className="block text-[11px] text-muted-foreground">
-                  {dayjs(n.created_at).format('M/D HH:mm')}
+                  {dayjs(n.created_at).format('M/D A h:mm')}
                   {n.related_date && ` · ${dayjs(n.related_date).format('M/D')}로 이동`}
                 </span>
               </span>

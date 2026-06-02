@@ -42,8 +42,8 @@ export function useRoomActions(roomId: string) {
           ],
     );
     try {
-      if (currentlyVoted) await removeVote(candidateId, s.participantId);
-      else await castVote(candidateId, s.participantId);
+      if (currentlyVoted) await removeVote(s.token, candidateId);
+      else await castVote(s.token, candidateId);
     } catch (e) {
       qc.setQueryData(key, prev); // rollback
       toast.error(friendlyError(e));
@@ -137,12 +137,11 @@ export function useRoomActions(roomId: string) {
     }
   }
 
-  async function createCandidate(date: string, start: string, end: string) {
+  async function createCandidate(date: string, start: string, end: string | null) {
     const s = await ensureAuth();
     try {
-      const created = await addCandidate({ roomId, date, start, end, createdBy: s.participantId });
-      // The creator implicitly supports the time they proposed.
-      await castVote(created.id, s.participantId);
+      // add_candidate auto-votes the creator server-side.
+      await addCandidate({ token: s.token, date, start, end });
       qc.invalidateQueries({ queryKey: qk.candidates(roomId) });
       qc.invalidateQueries({ queryKey: qk.votes(roomId) });
       qc.invalidateQueries({ queryKey: qk.participants(roomId) });
@@ -152,7 +151,7 @@ export function useRoomActions(roomId: string) {
     }
   }
 
-  async function updateCandidate(candidateId: string, start: string, end: string) {
+  async function updateCandidate(candidateId: string, start: string, end: string | null) {
     const s = await ensureAuth();
     try {
       await editCandidate(s.token, candidateId, start, end);
@@ -178,7 +177,7 @@ export function useRoomActions(roomId: string) {
   async function postComment(date: string, content: string) {
     const s = await ensureAuth();
     try {
-      await addComment({ roomId, date, participantId: s.participantId, content });
+      await addComment({ token: s.token, date, content });
       qc.invalidateQueries({ queryKey: qk.comments(roomId) });
     } catch (e) {
       toast.error(friendlyError(e));

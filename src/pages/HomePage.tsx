@@ -1,20 +1,64 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { CalendarHeart, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { useSessionStore } from '@/store/session';
+import { useRecentStore } from '@/store/recent';
 import { fetchRoom } from '@/lib/api';
 import { dayjs } from '@/lib/dayjs';
 import { qk } from '@/lib/queryClient';
+import type { Role } from '@/lib/types';
+
+interface RecentEntry {
+  roomId: string;
+  title?: string;
+  nickname?: string;
+  color?: string;
+  role?: Role;
+  at: string;
+}
 
 export default function HomePage() {
   const nav = useNavigate();
   const sessions = useSessionStore((s) => s.sessions);
   const clearSession = useSessionStore((s) => s.clearSession);
-  const recent = Object.values(sessions).sort(
-    (a, b) => (b.joinedAt ?? '').localeCompare(a.joinedAt ?? ''),
-  );
+  const recents = useRecentStore((s) => s.recents);
+  const removeRecent = useRecentStore((s) => s.removeRecent);
+
+  // Merge visited rooms (kept after logout) with active sessions (current
+  // identity wins). Sorted by most recent visit/join.
+  const recent = useMemo<RecentEntry[]>(() => {
+    const map = new Map<string, RecentEntry>();
+    for (const r of Object.values(recents)) {
+      map.set(r.roomId, {
+        roomId: r.roomId,
+        title: r.title,
+        nickname: r.nickname,
+        color: r.color,
+        role: r.role,
+        at: r.visitedAt,
+      });
+    }
+    for (const s of Object.values(sessions)) {
+      const ex = map.get(s.roomId);
+      map.set(s.roomId, {
+        roomId: s.roomId,
+        title: s.roomTitle ?? ex?.title,
+        nickname: s.nickname,
+        color: s.color,
+        role: s.role,
+        at: ex?.at && ex.at > (s.joinedAt ?? '') ? ex.at : s.joinedAt ?? ex?.at ?? '',
+      });
+    }
+    return [...map.values()].sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''));
+  }, [recents, sessions]);
+
+  const removeFromList = (roomId: string) => {
+    removeRecent(roomId);
+    clearSession(roomId);
+  };
 
   const roomQueries = useQueries({
     queries: recent.map((s) => ({
@@ -26,7 +70,7 @@ export default function HomePage() {
   });
 
   return (
-    <div className="flex flex-1 flex-col px-4 pb-safe pt-safe">
+    <div className="flex flex-1 animate-page flex-col px-4 pb-safe pt-safe">
       {/* Header */}
       <div className="flex items-center justify-between py-4">
         <div className="flex items-center gap-2">
@@ -49,7 +93,7 @@ export default function HomePage() {
                 const q = roomQueries[i];
                 const room = q?.data;
                 const isExpired = q?.isError;
-                const title = room?.title ?? s.roomTitle ?? '약속방';
+                const title = room?.title ?? s.title ?? '약속방';
                 const dateRange = room
                   ? `${dayjs(room.date_range_start).format('M/D')} – ${dayjs(room.date_range_end).format('M/D')}`
                   : null;
@@ -62,7 +106,13 @@ export default function HomePage() {
                       disabled={isExpired}
                       className="flex flex-1 items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-soft transition active:scale-[0.99] disabled:opacity-50"
                     >
-                      <Avatar nickname={s.nickname} color={s.color} size="md" />
+                      {s.nickname && s.color ? (
+                        <Avatar nickname={s.nickname} color={s.color} size="md" />
+                      ) : (
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                          <CalendarHeart className="h-5 w-5" />
+                        </span>
+                      )}
                       <div className="min-w-0 flex-1 text-left">
                         <div className="flex items-center gap-1.5">
                           <p className="truncate font-semibold">{title}</p>
@@ -78,14 +128,20 @@ export default function HomePage() {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {dateRange && <span className="mr-2">{dateRange}</span>}
-                          {s.role === 'host' ? '방장' : s.role === 'admin' ? '관리자' : '참여자'}
+                          {s.role === 'host'
+                            ? '방장'
+                            : s.role === 'admin'
+                              ? '관리자'
+                              : s.role === 'participant'
+                                ? '참여자'
+                                : '보기 전용'}
                         </p>
                       </div>
                       {!isExpired && <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     </button>
                     {isExpired && (
                       <button
-                        onClick={() => clearSession(s.roomId)}
+                        onClick={() => removeFromList(s.roomId)}
                         className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-destructive"
                         aria-label="목록에서 제거"
                       >

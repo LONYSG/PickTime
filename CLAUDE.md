@@ -586,6 +586,12 @@ supabase/
     0008_transfer_host    transfer_host RPC
     0009_finalize_allday  rooms.finalized_date + finalize_room_allday RPC
     0010_multi_finalize   rooms.finalized_options jsonb + finalize_room_multi RPC
+    0011_secure_everyday  cast_vote/remove_vote/add_candidate/add_comment token
+                          RPCs + drop permissive write policies (anti-forgery)
+    0012_change_pin       change_pin RPC (self-service PIN change)
+    0013_room_password    set_room_password RPC (host set/change/remove password)
+    0014_fix_transfer_host transfer_host token-hash fix + Korean role-change notifs
+    0015_optional_end_time time_candidates.end_time nullable (start-only candidates)
   functions/
     share/index.ts        Edge Function: dynamic OG tags + redirect (Deno)
 
@@ -690,17 +696,22 @@ All child tables cascade-delete from `rooms`.
   declare `set search_path = public, extensions`. If you add a new function that
   calls `crypt`/`digest`/`gen_random_bytes` and forget this, it silently fails at
   call time with a "function not found" error (see migration 0002).
-- **Two write paths:**
-  - *Everyday writes* (vote, all-day, comment, add candidate): straight to tables via
-    PostgREST under permissive room-scoped RLS. Still guarded by BEFORE INSERT
-    triggers (0005) that reject writes to a finalized room or from a `left` participant.
-  - *Privileged actions* go through token+role-checked SECURITY DEFINER RPCs:
-    `create_room`, `join_room`, `login_participant`, `verify_room_password`,
-    `edit_candidate`, `delete_candidate`, `finalize_room`, `finalize_room_allday`,
+- **All writes go through token-checked RPCs** (since migration 0011). The
+  participant is *always* derived from the session token server-side — the client
+  never supplies its own `participant_id` for a write, so votes/comments can't be
+  forged as another member. The permissive everyday-write RLS policies were dropped
+  in 0011; the only remaining direct-table write from the client is marking one's
+  own notifications read (`update_notifications` policy — not fairness-sensitive).
+  - *Everyday writes:* `cast_vote`, `remove_vote`, `add_candidate` (auto-votes the
+    creator), `add_comment`, `set_date_status`, `set_self_participation`. These are
+    still subject to the BEFORE INSERT guards (0005) that reject writes to a
+    finalized room or from a `left` participant.
+  - *Privileged / role-gated:* `create_room`, `join_room`, `login_participant`,
+    `verify_room_password`, `change_pin` (self), `edit_candidate`,
+    `delete_candidate`, `finalize_room`, `finalize_room_allday`,
     `finalize_room_multi`, `reopen_room`, `update_room_settings`,
     `rename_participant`, `set_participant_role`, `reset_participant_pin`,
-    `delete_room`, `set_date_status`, `set_self_participation`, `leave_room`,
-    `kick_participant`, `transfer_host`.
+    `delete_room`, `leave_room`, `kick_participant`, `transfer_host`.
 - **Session role sync:** `RoomPage` watches `data.participants` and auto-updates
   `session.role` in localStorage if it differs from the DB value — so role changes
   (e.g. host grants admin) are reflected immediately without refresh.
@@ -792,6 +803,131 @@ URL flow is built.
 
 ## TODO / known gaps
 
-- Bundle is a single ~155 KB-gzip chunk. Could code-split lazily later.
-- No self-service PIN change. Users must ask host/admin to reset their PIN.
 - If the host goes inactive permanently, no one can manage the room (host transfer exists but host must initiate it themselves).
+- Notification "read" is still a direct table update (anyone could mark another
+  member's notifications read). Low risk; left direct for simplicity.
+
+## Recently addressed (this session)
+
+- **Vote/comment forgery closed** (migration 0011): everyday writes are now
+  token-checked RPCs; permissive write RLS dropped. See Auth & security model.
+- **Self-service PIN change** (migration 0012 + `ChangePinButton` in RoomMenu →
+  내 참여 → 내 PIN 변경): proves current PIN, sets new one, sessions stay valid.
+- **Code-splitting**: route pages (`CreateRoomPage`, `RoomPage`, `NotFoundPage`)
+  are `React.lazy`-loaded behind `<Suspense>`; landing page no longer ships the
+  room UI. RoomPage is its own ~87 KB chunk.
+- **ErrorBoundary** (`src/components/ErrorBoundary.tsx`): wraps the routes; shows
+  a recovery screen on render errors and auto-reloads once on a stale-chunk
+  `ChunkLoadError` after a deploy.
+
+### UX round (this session)
+
+- **Color palette centered** (`ColorPicker` → `justify-center`).
+- **Time picker redesigned** (`TimeRangePicker`): drag-to-select **removed**. Now
+  conventional start/end dropdowns (custom-styled `appearance-none` selects with a
+  right-aligned chevron + floating label) plus 1h/2h/3h quick-duration chips.
+- **Add-time discoverability** (`DateSheet`): the two "my status" toggles are now
+  under an "이 날 내 상태" heading; the tiny "추가" text link became a full-width
+  dashed "＋ 시간 후보 추가" button that's always visible (large CTA when the date
+  is empty).
+- **Calendar decluttered** (`Calendar` + RoomPage `Legend`): dropped the 4-level
+  indigo heat background. Cells are clean white; participant color dots are the
+  density signal (brief's "color = fingerprint"); only the most-supported date(s)
+  get a single soft `bg-primary/5` tint. Legend updated accordingly.
+- **Room password management** (migration 0013, host only): RoomMenu →
+  `PasswordSettings` lets the host set / change / remove the room password after
+  creation. `update_room_settings` still only adds; removal goes through the new
+  `set_room_password` RPC (blank = remove).
+
+### UX round 2 (this session)
+
+- **12-hour clock everywhere** (`fmtTime`/`fmtRange` in `utils.ts`): times show as
+  오전/오후 (e.g. "오후 6시", range collapses shared period → "오후 6시–8시").
+  Comment/notification timestamps use `M/D A h:mm`. No 24-hour display remains.
+- **Time picker** (`TimeRangePicker`): drag + duration chips removed; two
+  centered 12-hour dropdowns (`appearance-none`, right chevron) with start-moves-
+  keeps-duration behavior.
+- **Bottom sheet** (`ui/sheet.tsx`): now flick-down-to-dismiss and animates out on
+  every close (backdrop/X/Escape) — stays mounted through the exit transition.
+  `DateSheet` retains the last date (`activeDate`) so its content stays put while
+  sliding out.
+- **Room menu consolidation** (`RoomMenu`): 약속이름/시작일/종료일/비밀번호 merged
+  into a single collapsible **방 설정** (one 설정 저장; password is a host-only
+  toggle inside it). 초대 링크 복사 + 카카오톡 공유 merged into one **친구
+  초대하기** button → `InviteDialog` (카카오톡 left, 링크 복사 right). Logout now
+  navigates home.
+- **Onboarding** (`LoginSheet` new-participant): nickname → PIN as two steps
+  (auto-focused), color **auto-assigned** (no picker). Room creation
+  (`CreateRoomPage`) also dropped the color picker.
+- **Color assignment** (`colors.ts`): `suggestColors` → `pickColor`. ~90-color
+  generated palette (30 hues × 3 tones + neutrals); assigns a random color among
+  those perceptually distinct (ΔE ≥ 22) from existing ones, for variety instead of
+  always-farthest clustering. `ColorPicker.tsx` is now unused.
+- **Calendar**: date sheet title is colored for holiday/Sun (rose) / Sat (sky).
+  Tied top dates already all highlight.
+- **Recent rooms persist after logout** (`store/recent.ts`): visiting a room
+  records it (kept independent of login); HomePage merges recents with active
+  sessions, so logging out no longer loses the room (shows as "보기 전용", re-enter
+  in view mode). Expired/removed via `removeRecent` + `clearSession`.
+
+### UX round 3 (this session)
+
+- **Host transfer fixed** (migration 0014): `transfer_host` was comparing a bytea
+  digest to the hex-text token hash (always errored). Rewritten via
+  `_participant_from_token`. Role-change notifications now Korean
+  (`set_participant_role` + transfer), and use the correct `role_change` type.
+- **Kicked/left auto-eject** (`RoomPage`): if the logged-in user's participant row
+  becomes `left` (kicked/left elsewhere), the now-invalid session is cleared →
+  viewer mode (fixes the "still inside after kick / can't rejoin" stuck state).
+- **Optional end time** (migration 0015): `time_candidates.end_time` is nullable;
+  a candidate can be a start only ("오후 4시"). `add_candidate`/`edit_candidate`
+  accept null end; `TimeCandidate.end_time`/`PromisingOption.end_time` are
+  `string | null`. `fmtRange(start, end?)` shows "오후 3시 30분 ~ 오후 4시 30분" or
+  just "오후 4시".
+- **Time display** (`utils.fmtTime/fmtRange`): Korean 12-hour with 분
+  ("오후 4시", "오후 4시 30분"), " ~ " separator. Old en-dash form dropped.
+- **Alarm-style wheel picker** (`TimeWheelPicker`, replaces `TimeRangePicker`):
+  scroll wheels for 오전·오후 / 시 / 분 (1-minute), default = current time rounded
+  up to 10 min, optional "종료 시간 추가" toggle. `DateSheet`'s AddCandidate uses
+  it and blocks past times when the date is today.
+- **Onboarding back button** (`LoginSheet`): rebuilt as `choose → new-nick →
+  new-pin / existing` modes with a single context-aware header back arrow (the
+  duplicate/non-working arrow is gone).
+- **Bottom sheet** (`ui/sheet.tsx`): drag-to-dismiss now lives only on the grab
+  handle, so the header back/X buttons are reliably tappable (pointer-capture was
+  swallowing their clicks).
+- **Calendar refresh** (`Calendar`): rounded-2xl cells, stronger today chip, color
+  dots with ring, and—when a date has no votes—the **holiday name** in red (data
+  from the `holidays` table). Added a "오늘" jump button. `participantCount` prop
+  removed.
+- **Dead files removed**: `ColorPicker.tsx`, `TimeRangePicker.tsx` (superseded by
+  auto color assignment and the wheel picker).
+
+### UX round 4 (this session, frontend only)
+
+- **Time picker is now a Dialog** (`DateSheet` AddCandidate): "시간 추가/수정" opens
+  a separate popup with the wheel + "설정 완료", instead of inline-in-the-sheet
+  (avoids scroll-within-scroll).
+- **No 2-line time text**: `whitespace-nowrap` (+ smaller font) on times in
+  PromisingOptions, CandidateListView, DateSheet, MembersSheet chips; invite
+  dialog copy shortened to one line.
+- **Confirm dialogs** for destructive/navigational actions: 전체 불참
+  (`ParticipationButton`), 로그아웃 (`LogoutButton`), 홈 버튼 (RoomPage).
+- **Shared nav header** (`components/PageHeader.tsx`): CreateRoomPage uses it so
+  back-button/padding match RoomPage exactly.
+- **Animations**: page transitions (`animate-page`, slide-in-right) on Home/Create/
+  Room; member-expand (`animate-expand-in`) in MembersSheet; sheets/dialogs already
+  animate. Tailwind keyframes `slide-in-right`/`expand-in` added.
+- **Comment empty state** unified to "아직 댓글이 없어요." everywhere.
+- **Vote vs see-who tap zones** (`DateSheet`, `CandidateListView`): the whole top
+  row toggles the vote; voter avatars live in a separate divider-separated
+  muted-bg zone that opens the name dialog — boundary is now visually clear.
+- **Participants merged into 참여 현황** (`MembersSheet`): the room menu no longer
+  lists participants. MembersSheet shows host/admin icons and sorts voted-first
+  (latest vote on top) then non-voters (latest to join on top); tapping a member's
+  voted time/date jumps to that date. Participant **management** (role/kick/host
+  transfer) moved into 방 설정 (`RoomSettingsForm`, managers only).
+- **Room password unmasked**: the protect-room field is `type="text"` (single
+  entry, no confirm) in both create and settings.
+- **Removed others' nickname/PIN editing**: rename + PIN-reset of other members are
+  gone from `ParticipantRow` (kept role toggle / transfer / kick).

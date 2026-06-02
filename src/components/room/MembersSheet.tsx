@@ -31,6 +31,7 @@ export function MembersSheet({
   candidates,
   votes,
   availability,
+  onOpenDate,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,21 +39,42 @@ export function MembersSheet({
   candidates: TimeCandidate[];
   votes: CandidateVote[];
   availability: DateAvailability[];
+  onOpenDate: (date: string) => void;
 }) {
   const candidateById = useMemo(
     () => new Map(candidates.map((c) => [c.id, c])),
     [candidates],
   );
-  const members = participants.filter((p) => p.status !== 'left');
 
-  const participatedCount = members.filter((m) => {
-    if (m.status === 'unavailable') return false;
-    const hasVote = votes.some((v) => v.participant_id === m.id);
-    const hasAllDay = availability.some(
-      (a) => a.participant_id === m.id && a.status === 'all_day',
-    );
-    return hasVote || hasAllDay;
-  }).length;
+  const hasParticipated = (m: Participant) =>
+    m.status !== 'unavailable' &&
+    (votes.some((v) => v.participant_id === m.id) ||
+      availability.some((a) => a.participant_id === m.id && a.status === 'all_day'));
+
+  // Voted group on top (latest vote first); then the rest (latest to join first).
+  const members = useMemo(() => {
+    const lastActivity = (m: Participant) => {
+      const ts = [
+        ...votes.filter((v) => v.participant_id === m.id).map((v) => v.created_at),
+        ...availability
+          .filter((a) => a.participant_id === m.id && a.status === 'all_day')
+          .map((a) => a.created_at),
+      ].sort();
+      return ts.at(-1) ?? '';
+    };
+    return participants
+      .filter((p) => p.status !== 'left')
+      .sort((a, b) => {
+        const pa = hasParticipated(a);
+        const pb = hasParticipated(b);
+        if (pa !== pb) return pa ? -1 : 1;
+        if (pa) return lastActivity(b).localeCompare(lastActivity(a));
+        return b.created_at.localeCompare(a.created_at);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants, votes, availability]);
+
+  const participatedCount = members.filter(hasParticipated).length;
 
   return (
     <Sheet
@@ -75,6 +97,10 @@ export function MembersSheet({
             candidateById={candidateById}
             votes={votes.filter((v) => v.participant_id === m.id)}
             availability={availability.filter((a) => a.participant_id === m.id)}
+            onOpenDate={(date) => {
+              onClose();
+              onOpenDate(date);
+            }}
           />
         ))}
       </div>
@@ -87,11 +113,13 @@ function MemberRow({
   candidateById,
   votes,
   availability,
+  onOpenDate,
 }: {
   m: Participant;
   candidateById: Map<string, TimeCandidate>;
   votes: CandidateVote[];
   availability: DateAvailability[];
+  onOpenDate: (date: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -153,11 +181,11 @@ function MemberRow({
       </button>
 
       {open && hasDetail && (
-        <div className="space-y-3 border-t border-border bg-muted/40 px-3 py-3 text-sm">
+        <div className="animate-expand-in space-y-3 border-t border-border bg-muted/40 px-3 py-3 text-sm">
           {votedCandidates.length > 0 && (
-            <Detail icon={<Check className="h-4 w-4 text-primary" />} label="투표한 시간">
+            <Detail icon={<Check className="h-4 w-4 text-primary" />} label="투표한 시간 (눌러서 이동)">
               {votedCandidates.map((c) => (
-                <Chip key={c.id}>
+                <Chip key={c.id} onClick={() => onOpenDate(c.date)}>
                   {dayjs(c.date).format('M/D')} {fmtRange(c.start_time, c.end_time)}
                 </Chip>
               ))}
@@ -166,14 +194,16 @@ function MemberRow({
           {allDayDates.length > 0 && (
             <Detail icon={<Sun className="h-4 w-4 text-amber-500" />} label="하루종일 가능">
               {allDayDates.map((d) => (
-                <Chip key={d}>{dayjs(d).format('M/D (ddd)')}</Chip>
+                <Chip key={d} onClick={() => onOpenDate(d)}>
+                  {dayjs(d).format('M/D (ddd)')}
+                </Chip>
               ))}
             </Detail>
           )}
           {unavailableDates.length > 0 && (
             <Detail icon={<CalendarOff className="h-4 w-4 text-rose-500" />} label="불참">
               {unavailableDates.map((d) => (
-                <Chip key={d} tone="rose">
+                <Chip key={d} tone="rose" onClick={() => onOpenDate(d)}>
                   {dayjs(d).format('M/D (ddd)')}
                 </Chip>
               ))}
@@ -204,15 +234,25 @@ function Detail({
   );
 }
 
-function Chip({ children, tone }: { children: React.ReactNode; tone?: 'rose' }) {
-  return (
-    <span
-      className={cn(
-        'rounded-lg px-2 py-1 text-xs font-medium',
-        tone === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-card text-foreground',
-      )}
-    >
+function Chip({
+  children,
+  tone,
+  onClick,
+}: {
+  children: React.ReactNode;
+  tone?: 'rose';
+  onClick?: () => void;
+}) {
+  const cls = cn(
+    'whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium',
+    tone === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-card text-foreground',
+    onClick && 'active:scale-95',
+  );
+  return onClick ? (
+    <button onClick={onClick} className={cls}>
       {children}
-    </span>
+    </button>
+  ) : (
+    <span className={cls}>{children}</span>
   );
 }

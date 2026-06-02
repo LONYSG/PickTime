@@ -4,16 +4,29 @@ import { Sheet } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { Avatar } from '@/components/ui/avatar';
-import { ColorPicker } from '@/components/ColorPicker';
 import { PinInput } from '@/components/PinInput';
 import { toast } from '@/components/ui/toast';
-import { suggestColors } from '@/lib/colors';
+import { pickColor } from '@/lib/colors';
 import { friendlyError, joinRoom, loginParticipant } from '@/lib/api';
 import { useSessionStore } from '@/store/session';
 import { nowKST } from '@/lib/dayjs';
 import type { Participant, Session } from '@/lib/types';
 
-type Mode = 'choose' | 'new' | 'existing';
+type Mode = 'choose' | 'new-nick' | 'new-pin' | 'existing';
+
+const BACK: Record<Mode, Mode | null> = {
+  choose: null,
+  'new-nick': 'choose',
+  'new-pin': 'new-nick',
+  existing: 'choose',
+};
+
+const TITLE: Record<Mode, string> = {
+  choose: '참여하기',
+  'new-nick': '닉네임 정하기',
+  'new-pin': 'PIN 설정',
+  existing: '기존 참가자',
+};
 
 export function LoginSheet({
   open,
@@ -31,11 +44,25 @@ export function LoginSheet({
   onAuthed: (s: Session) => void;
 }) {
   const [mode, setMode] = useState<Mode>('choose');
+  const [nickname, setNickname] = useState('');
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
   const setSession = useSessionStore((s) => s.setSession);
+
   const loginable = participants.filter((p) => p.status !== 'left');
+  // Color is auto-assigned (no picking), avoiding colors already in the room.
+  const color = useMemo(() => pickColor(participants.map((p) => p.color_hex)), [participants]);
+  const existingNames = useMemo(
+    () => new Set(loginable.map((p) => p.nickname.trim().toLowerCase())),
+    [loginable],
+  );
 
   useEffect(() => {
-    if (open) setMode('choose');
+    if (open) {
+      setMode('choose');
+      setNickname('');
+      setPin('');
+    }
   }, [open]);
 
   const finish = (s: Session) => {
@@ -44,22 +71,55 @@ export function LoginSheet({
     onAuthed(enriched);
   };
 
+  function toPin() {
+    const n = nickname.trim();
+    if (!n) return;
+    if (existingNames.has(n.toLowerCase())) {
+      toast.error('이미 사용 중인 닉네임이에요.');
+      return;
+    }
+    setMode('new-pin');
+  }
+
+  async function join() {
+    if (pin.length !== 4) return;
+    setBusy(true);
+    try {
+      const res = await joinRoom({ roomId, nickname: nickname.trim(), color, pin });
+      finish({
+        roomId,
+        participantId: res.participant_id,
+        token: res.token,
+        nickname: nickname.trim(),
+        color,
+        role: 'participant',
+      });
+      toast.success('참여 완료!');
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const back = BACK[mode];
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
       title={
         <span className="flex items-center gap-1">
-          {mode !== 'choose' && (
+          {back && (
             <button
-              onClick={() => setMode('choose')}
+              onClick={() => setMode(back)}
               className="-ml-2 grid h-8 w-8 place-items-center rounded-full hover:bg-muted"
               aria-label="뒤로"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
           )}
-          {mode === 'choose' ? '참여하기' : mode === 'new' ? '새 참가자' : '기존 참가자'}
+          {TITLE[mode]}
         </span>
       }
     >
@@ -69,7 +129,7 @@ export function LoginSheet({
             투표하거나 의견을 남기려면 참여가 필요해요.
           </p>
           <button
-            onClick={() => setMode('new')}
+            onClick={() => setMode('new-nick')}
             className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left active:scale-[0.99]"
           >
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -77,7 +137,7 @@ export function LoginSheet({
             </span>
             <span>
               <span className="block font-semibold">처음이에요</span>
-              <span className="block text-sm text-muted-foreground">닉네임과 색상을 정해요</span>
+              <span className="block text-sm text-muted-foreground">닉네임만 정하면 끝</span>
             </span>
           </button>
           <button
@@ -96,79 +156,42 @@ export function LoginSheet({
         </div>
       )}
 
-      {mode === 'new' && (
-        <NewParticipant roomId={roomId} participants={participants} onDone={finish} />
+      {mode === 'new-nick' && (
+        <div className="space-y-5 pb-4">
+          <div>
+            <Label>닉네임</Label>
+            <Input
+              placeholder="닉네임을 입력하세요"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && toPin()}
+              maxLength={24}
+              autoFocus
+            />
+          </div>
+          <Button className="w-full" size="lg" disabled={!nickname.trim()} onClick={toPin}>
+            다음
+          </Button>
+        </div>
       )}
+
+      {mode === 'new-pin' && (
+        <div className="space-y-5 pb-4">
+          <div>
+            <Label>4자리 PIN 설정</Label>
+            <p className="mb-2 text-xs text-muted-foreground">다시 입장할 때 사용해요.</p>
+            <PinInput value={pin} onChange={setPin} autoFocus />
+          </div>
+          <Button className="w-full" size="lg" disabled={pin.length !== 4 || busy} onClick={join}>
+            {busy ? '참여 중…' : '완료'}
+          </Button>
+        </div>
+      )}
+
       {mode === 'existing' && (
         <ExistingParticipant roomId={roomId} participants={loginable} onDone={finish} />
       )}
     </Sheet>
-  );
-}
-
-function NewParticipant({
-  roomId,
-  participants,
-  onDone,
-}: {
-  roomId: string;
-  participants: Participant[];
-  onDone: (s: Session) => void;
-}) {
-  const taken = useMemo(() => participants.map((p) => p.color_hex), [participants]);
-  const colors = useMemo(() => suggestColors(taken, 5), [taken]);
-  const [nickname, setNickname] = useState('');
-  const [color, setColor] = useState<string | null>(colors[0] ?? null);
-  const [pin, setPin] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const valid = nickname.trim() && color && pin.length === 4;
-
-  async function submit() {
-    if (!valid || !color) return;
-    setBusy(true);
-    try {
-      const res = await joinRoom({ roomId, nickname: nickname.trim(), color, pin });
-      onDone({
-        roomId,
-        participantId: res.participant_id,
-        token: res.token,
-        nickname: nickname.trim(),
-        color,
-        role: 'participant',
-      });
-      toast.success('참여 완료!');
-    } catch (e) {
-      toast.error(friendlyError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-5 pb-4">
-      <div>
-        <Label>닉네임</Label>
-        <Input
-          placeholder="닉네임"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          maxLength={24}
-          autoFocus
-        />
-      </div>
-      <div>
-        <Label>색상 고르기 (가입 후 변경 불가)</Label>
-        <ColorPicker colors={colors} value={color} onChange={setColor} />
-      </div>
-      <div>
-        <Label>4자리 PIN</Label>
-        <PinInput value={pin} onChange={setPin} />
-      </div>
-      <Button className="w-full" size="lg" disabled={!valid || busy} onClick={submit}>
-        {busy ? '참여 중…' : '참여하기'}
-      </Button>
-    </div>
   );
 }
 
@@ -226,7 +249,7 @@ function ExistingParticipant({
           <button
             key={p.id}
             onClick={() => setSelected(p)}
-            className="flex flex-col items-center gap-2 rounded-2xl p-3 active:scale-95 hover:bg-muted"
+            className="flex flex-col items-center gap-2 rounded-2xl p-3 hover:bg-muted active:scale-95"
           >
             <Avatar nickname={p.nickname} color={p.color_hex} size="lg" />
             <span className="max-w-full truncate text-xs font-medium">{p.nickname}</span>
@@ -259,12 +282,7 @@ function ExistingParticipant({
           잠금 상태예요. 잠시 후 다시 시도하거나 방장에게 PIN 초기화를 요청하세요.
         </p>
       )}
-      <Button
-        className="w-full"
-        size="lg"
-        disabled={pin.length !== 4 || busy || locked}
-        onClick={submit}
-      >
+      <Button className="w-full" size="lg" disabled={pin.length !== 4 || busy || locked} onClick={submit}>
         {busy ? '확인 중…' : '입장'}
       </Button>
     </div>

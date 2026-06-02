@@ -74,7 +74,7 @@ export function PromisingOptions({
                       <Sun className="h-3.5 w-3.5" /> 하루종일
                     </span>
                   ) : (
-                    fmtRange(o.start_time!, o.end_time!)
+                    <span className="whitespace-nowrap">{fmtRange(o.start_time!, o.end_time)}</span>
                   )}
                   {o.unavailableCount > 0 && (
                     <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">

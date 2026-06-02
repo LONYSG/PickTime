@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/PageHeader';
 import { Input, Label } from '@/components/ui/input';
-import { ColorPicker } from '@/components/ColorPicker';
 import { PinInput } from '@/components/PinInput';
 import { toast } from '@/components/ui/toast';
-import { suggestColors } from '@/lib/colors';
+import { pickColor } from '@/lib/colors';
 import { createRoom, friendlyError } from '@/lib/api';
 import { useSessionStore } from '@/store/session';
 import { nowKST, todayStr } from '@/lib/dayjs';
@@ -21,9 +20,8 @@ export default function CreateRoomPage() {
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
 
-  const colors = useMemo(() => suggestColors([], 5), []);
+  const color = useMemo(() => pickColor([]), []);
   const [nickname, setNickname] = useState('');
-  const [color, setColor] = useState<string | null>(colors[0] ?? null);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -33,12 +31,11 @@ export default function CreateRoomPage() {
     end &&
     end >= start &&
     nickname.trim() &&
-    color &&
     pin.length === 4 &&
     (!usePassword || password.length >= 1);
 
   async function submit() {
-    if (!valid || !color) return;
+    if (!valid) return;
     setBusy(true);
     try {
       const res = await createRoom({
@@ -70,17 +67,11 @@ export default function CreateRoomPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col pb-safe">
-      <header className="flex items-center gap-2 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))]">
-        <button
-          onClick={() => nav('/')}
-          className="grid h-10 w-10 place-items-center rounded-full hover:bg-muted"
-          aria-label="뒤로"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <h1 className="text-lg font-bold">새 약속 방 만들기</h1>
-      </header>
+    <div className="flex flex-1 animate-page flex-col pb-safe">
+      <PageHeader
+        onBack={() => nav('/')}
+        title={<h1 className="text-base font-bold">새 약속 방 만들기</h1>}
+      />
 
       <div className="flex-1 space-y-6 overflow-y-auto px-6 py-4">
         <section className="space-y-4">
@@ -114,7 +105,7 @@ export default function CreateRoomPage() {
           </label>
           {usePassword && (
             <Input
-              type="password"
+              type="text"
               placeholder="방 비밀번호"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -134,10 +125,6 @@ export default function CreateRoomPage() {
               onChange={(e) => setNickname(e.target.value)}
               maxLength={24}
             />
-          </div>
-          <div>
-            <Label>내 색상</Label>
-            <ColorPicker colors={colors} value={color} onChange={setColor} />
           </div>
           <div>
             <Label>4자리 PIN (다시 입장할 때 사용)</Label>

@@ -117,34 +117,34 @@ export function CandidateListView({
           return (
             <div
               key={`allday-${row.date}`}
-              className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-2.5"
+              className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50"
             >
-              <button
-                disabled={readOnly}
-                onClick={() => actions.setMyDateStatus(row.date, iAmAllDay ? 'none' : 'all_day')}
-                className={cn(
-                  'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95',
-                  iAmAllDay ? 'border-amber-400 bg-amber-400 text-white' : 'border-amber-300 bg-card text-amber-500',
-                  readOnly && 'opacity-60',
-                )}
-                aria-label="하루종일 가능 표시"
-              >
-                <Sun className="h-5 w-5" />
-              </button>
-              {dateCol}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-semibold">하루종일 가능</span>
+              <div className="flex items-center gap-2 p-2.5">
+                {dateCol}
+                <button
+                  disabled={readOnly}
+                  onClick={() => actions.setMyDateStatus(row.date, iAmAllDay ? 'none' : 'all_day')}
+                  className={cn('flex flex-1 items-center gap-2 text-left transition', !readOnly && 'active:scale-[0.99]')}
+                >
+                  <span
+                    className={cn(
+                      'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2',
+                      iAmAllDay ? 'border-amber-400 bg-amber-400 text-white' : 'border-amber-300 bg-card text-amber-500',
+                    )}
+                  >
+                    <Sun className="h-5 w-5" />
+                  </span>
+                  <span className="whitespace-nowrap font-semibold">하루종일 가능</span>
                   {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
                   <CountPill total={row.total} tone="amber" />
-                </div>
-                <div className="mt-1">
-                  <VoterAvatars
-                    supporters={row.parts}
-                    explicitIds={[]}
-                    title={`${d.format('M/D')} 하루종일 가능 · ${row.total}명`}
-                  />
-                </div>
+                </button>
+              </div>
+              <div className="border-t border-amber-200/70 bg-amber-50/60 px-3 py-2">
+                <VoterAvatars
+                  supporters={row.parts}
+                  explicitIds={[]}
+                  title={`${d.format('M/D')} 하루종일 가능 · ${row.total}명`}
+                />
               </div>
             </div>
           );
@@ -163,40 +163,44 @@ export function CandidateListView({
           <div
             key={t.candidate.id}
             className={cn(
-              'flex items-center gap-3 rounded-2xl border p-2.5',
+              'overflow-hidden rounded-2xl border',
               isFinal ? 'border-amber-300 bg-amber-50' : 'border-border bg-card',
             )}
           >
-            <button
-              disabled={readOnly}
-              onClick={() => actions.toggleVote(t.candidate.id, voted)}
-              className={cn(
-                'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2 transition active:scale-95',
-                voted ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground',
-                readOnly && 'opacity-60',
-              )}
-              aria-label="투표"
-            >
-              <Check className="h-5 w-5" />
-            </button>
-            {dateCol}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-bold">{fmtRange(t.candidate.start_time, t.candidate.end_time)}</span>
+            <div className="flex items-center gap-2 p-2.5">
+              {dateCol}
+              <button
+                disabled={readOnly}
+                onClick={() => actions.toggleVote(t.candidate.id, voted)}
+                className={cn('flex flex-1 items-center gap-2 text-left transition', !readOnly && 'active:scale-[0.99]')}
+              >
+                <span
+                  className={cn(
+                    'grid h-10 w-10 shrink-0 place-items-center rounded-xl border-2',
+                    voted ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground',
+                  )}
+                >
+                  <Check className="h-5 w-5" />
+                </span>
+                <span className="whitespace-nowrap text-[13px] font-bold">
+                  {fmtRange(t.candidate.start_time, t.candidate.end_time)}
+                </span>
                 {isFinal && (
                   <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">확정</span>
                 )}
                 {row.unavailable > 0 && <UnavailBadge n={row.unavailable} />}
                 <CountPill total={t.total} />
-              </div>
-              <div className="mt-1">
+              </button>
+            </div>
+            {supporters.length > 0 && (
+              <div className="border-t border-border/60 bg-muted/30 px-3 py-2">
                 <VoterAvatars
                   supporters={supporters}
                   explicitIds={t.explicitVoterIds}
                   title={`${d.format('M/D')} ${fmtRange(t.candidate.start_time, t.candidate.end_time)} · ${t.total}명`}
                 />
               </div>
-            </div>
+            )}
           </div>
         );
       })}

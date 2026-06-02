@@ -6,7 +6,6 @@ import {
   MessageCircle,
   CheckCircle2,
   RotateCcw,
-  Pencil,
   KeyRound,
   ShieldCheck,
   Shield,
@@ -18,6 +17,9 @@ import {
   DoorOpen,
   LogIn,
   ArrowRightLeft,
+  UserPlus,
+  Settings,
+  ChevronDown,
 } from 'lucide-react';
 import { Sheet } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -30,15 +32,15 @@ import { dayjs, todayStr } from '@/lib/dayjs';
 import { fmtRange, cn } from '@/lib/utils';
 import { qk } from '@/lib/queryClient';
 import {
+  changePin,
   deleteRoom,
   finalizeRoomMulti,
   friendlyError,
   kickParticipant,
   leaveRoom,
-  renameParticipant,
   reopenRoom,
-  resetParticipantPin,
   setParticipantRole,
+  setRoomPassword,
   setSelfParticipation,
   transferHost,
   updateRoomSettings,
@@ -79,6 +81,7 @@ export function RoomMenu({
   const isManager = myRole === 'host' || myRole === 'admin';
   const participantsById = new Map(participants.map((p) => [p.id, p]));
   const [finalizing, setFinalizing] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const refreshRoom = () => qc.invalidateQueries({ queryKey: qk.room(room.id) });
   const refreshParticipants = () => qc.invalidateQueries({ queryKey: qk.participants(room.id) });
@@ -119,9 +122,11 @@ export function RoomMenu({
     <Sheet open={open} onClose={onClose} title="방 메뉴">
       <div className="space-y-5 pb-4">
         {!session && (
-          <Button className="w-full justify-start" onClick={() => { onClose(); void ensureAuth(); }}>
-            <LogIn className="h-5 w-5" /> 참여하기 / 로그인
-          </Button>
+          <section className="border-b border-border pb-4">
+            <Button className="w-full justify-start" onClick={() => { onClose(); void ensureAuth(); }}>
+              <LogIn className="h-5 w-5" /> 참여하기 / 로그인
+            </Button>
+          </section>
         )}
 
         {room.is_finalized ? (
@@ -154,15 +159,9 @@ export function RoomMenu({
               </Button>
             )}
 
-            {/* 참가자 목록 (읽기 전용) */}
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold text-muted-foreground">참가자 {participants.length}명</h3>
-              <div className="space-y-1.5">
-                {participants.map((p) => (
-                  <ParticipantRow key={p.id} p={p} room={room} session={session} me={me} onChanged={refreshParticipants} />
-                ))}
-              </div>
-            </section>
+            <p className="text-sm text-muted-foreground">
+              참가자와 참여 현황은 상단 👥 버튼에서 볼 수 있어요.
+            </p>
 
             <section className="space-y-2 border-t border-border pt-4">
               {session?.role === 'host' && (
@@ -172,25 +171,16 @@ export function RoomMenu({
                 }} />
               )}
               {session && (
-                <Button variant="ghost" className="w-full justify-start text-muted-foreground"
-                  onClick={() => { clearSession(room.id); onClose(); toast.info('로그아웃했어요.'); }}>
-                  <LogOut className="h-5 w-5" /> 로그아웃
-                </Button>
+                <LogoutButton onConfirm={() => { clearSession(room.id); onClose(); toast.info('로그아웃했어요.'); nav('/'); }} />
               )}
             </section>
           </>
         ) : (
           /* ── 일반 메뉴 ── */
           <>
-            <section className="space-y-2 border-b border-border pb-4">
-              <Button variant="secondary" className="w-full justify-start" onClick={copyLink}>
-                <Link2 className="h-5 w-5" /> 초대 링크 복사
-              </Button>
-              <Button
-                className="w-full justify-start bg-[#FEE500] text-[#191919] hover:bg-[#F5DC00]"
-                onClick={() => shareRoom(room.id, room.title)}
-              >
-                <MessageCircle className="h-5 w-5" /> 카카오톡으로 공유
+            <section className="border-b border-border pb-4">
+              <Button variant="secondary" className="w-full justify-start" onClick={() => setInviteOpen(true)}>
+                <UserPlus className="h-5 w-5" /> 이 약속에 친구 초대하기
               </Button>
             </section>
 
@@ -207,38 +197,38 @@ export function RoomMenu({
               </section>
             )}
 
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold text-muted-foreground">참가자 {participants.length}명</h3>
-              <div className="space-y-1.5">
-                {participants.map((p) => (
-                  <ParticipantRow key={p.id} p={p} room={room} session={session} me={me} onChanged={refreshParticipants} />
-                ))}
-              </div>
-            </section>
-
             {isManager && session && (
-              <RoomSettingsForm room={room} session={session} candidates={candidates} votes={votes} onSaved={refreshRoom} />
+              <RoomSettingsForm
+                room={room}
+                session={session}
+                candidates={candidates}
+                votes={votes}
+                participants={participants}
+                me={me}
+                isHost={myRole === 'host'}
+                onSaved={refreshRoom}
+                onParticipantsChanged={refreshParticipants}
+              />
             )}
 
             {session && me && (
               <section className="space-y-2 border-t border-border pt-4">
                 <h3 className="text-sm font-bold text-muted-foreground">내 참여</h3>
-                <Button
-                  variant="outline"
-                  className={cn('w-full justify-start', me.status === 'unavailable' && 'text-primary')}
-                  onClick={async () => {
+                <ParticipationButton
+                  unavailable={me.status === 'unavailable'}
+                  onToggle={async (next) => {
                     try {
-                      await setSelfParticipation(session.token, me.status !== 'unavailable');
+                      await setSelfParticipation(session.token, next);
                       qc.invalidateQueries({ queryKey: qk.participants(room.id) });
                       qc.invalidateQueries({ queryKey: qk.votes(room.id) });
                       qc.invalidateQueries({ queryKey: qk.availability(room.id) });
-                      toast.success(me.status === 'unavailable' ? '다시 참여로 전환했어요.' : '이 약속 전체 불참으로 표시했어요.');
-                    } catch (e) { toast.error(friendlyError(e)); }
+                      toast.success(next ? '이 약속 전체 불참으로 표시했어요.' : '다시 참여로 전환했어요.');
+                    } catch (e) {
+                      toast.error(friendlyError(e));
+                    }
                   }}
-                >
-                  <Ban className="h-5 w-5" />
-                  {me.status === 'unavailable' ? '다시 참여하기' : '이 약속 전체 불참'}
-                </Button>
+                />
+                <ChangePinButton token={session.token} />
                 {session.role !== 'host' && (
                   <LeaveRoomButton onConfirm={async () => {
                     try { await leaveRoom(session.token); clearSession(room.id); toast.success('방에서 나갔어요.'); nav('/'); }
@@ -256,15 +246,25 @@ export function RoomMenu({
                 }} />
               )}
               {session && (
-                <Button variant="ghost" className="w-full justify-start text-muted-foreground"
-                  onClick={() => { clearSession(room.id); onClose(); toast.info('로그아웃했어요. 보기 모드로 전환돼요.'); }}>
-                  <LogOut className="h-5 w-5" /> 로그아웃
-                </Button>
+                <LogoutButton onConfirm={() => { clearSession(room.id); onClose(); toast.info('로그아웃했어요.'); nav('/'); }} />
               )}
             </section>
           </>
         )}
       </div>
+
+      <InviteDialog
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onKakao={() => {
+          shareRoom(room.id, room.title);
+          setInviteOpen(false);
+        }}
+        onCopy={async () => {
+          await copyLink();
+          setInviteOpen(false);
+        }}
+      />
 
       {finalizing && session && (
         <FinalizeDialog
@@ -309,12 +309,9 @@ function ParticipantRow({
 }) {
   const myRole = me?.role ?? session?.role;
   const canManage = (myRole === 'host' || myRole === 'admin') && p.role !== 'host' && !room.is_finalized;
-  const [editing, setEditing] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [kicking, setKicking] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [roleConfirm, setRoleConfirm] = useState(false);
-  const [name, setName] = useState(p.nickname);
   const isMe = session?.participantId === p.id;
 
   return (
@@ -337,26 +334,13 @@ function ParticipantRow({
         {canManage && (
           <div className="flex items-center gap-1 text-muted-foreground">
             <button
-              onClick={() => setEditing((v) => !v)}
-              className="grid h-8 w-8 place-items-center rounded-full hover:bg-card"
-              aria-label="이름 변경"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
               onClick={() => setRoleConfirm(true)}
               className="grid h-8 w-8 place-items-center rounded-full hover:bg-card"
               aria-label={p.role === 'admin' ? '관리자 해제' : '관리자로 지정'}
             >
               {p.role === 'admin' ? <Shield className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
             </button>
-            <button
-              onClick={() => setResetting(true)}
-              className="grid h-8 w-8 place-items-center rounded-full hover:bg-card"
-              aria-label="PIN 초기화"
-            >
-              <KeyRound className="h-4 w-4" />
-            </button>
+            {/* 닉네임 변경 / PIN 초기화는 월권 소지가 있어 비활성화 (필요 시 복구) */}
             {myRole === 'host' && !isMe && (
               <button
                 onClick={() => setTransferring(true)}
@@ -461,43 +445,6 @@ function ParticipantRow({
         </Dialog>
       )}
 
-      {editing && session && (
-        <div className="mt-2 flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} className="h-10" maxLength={24} />
-          <Button
-            size="sm"
-            className="h-10"
-            onClick={async () => {
-              try {
-                await renameParticipant(session.token, p.id, name.trim());
-                setEditing(false);
-                onChanged();
-                toast.success('이름을 변경했어요.');
-              } catch (e) {
-                toast.error(friendlyError(e));
-              }
-            }}
-          >
-            저장
-          </Button>
-        </div>
-      )}
-
-      {resetting && session && (
-        <ResetPinDialog
-          nickname={p.nickname}
-          onClose={() => setResetting(false)}
-          onSubmit={async (pin) => {
-            try {
-              await resetParticipantPin(session.token, p.id, pin);
-              setResetting(false);
-              toast.success(`${p.nickname}님의 PIN을 초기화했어요.`);
-            } catch (e) {
-              toast.error(friendlyError(e));
-            }
-          }}
-        />
-      )}
       {/* room kept for potential future per-room rules */}
       <span className="hidden">{room.id}</span>
     </div>
@@ -509,17 +456,28 @@ function RoomSettingsForm({
   session,
   candidates,
   votes,
+  participants,
+  me,
+  isHost,
   onSaved,
+  onParticipantsChanged,
 }: {
   room: Room;
   session: Session;
   candidates: TimeCandidate[];
   votes: CandidateVote[];
+  participants: Participant[];
+  me: Participant | undefined;
+  isHost: boolean;
   onSaved: () => void;
+  onParticipantsChanged: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState(room.title);
   const [start, setStart] = useState(room.date_range_start);
   const [end, setEnd] = useState(room.date_range_end);
+  const [pwOn, setPwOn] = useState(room.has_password);
+  const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -532,6 +490,11 @@ function RoomSettingsForm({
   ).size;
 
   async function save() {
+    // Want a password on but never set one → ask for it.
+    if (isHost && pwOn && !room.has_password && !pw.trim()) {
+      toast.error('사용할 비밀번호를 입력해주세요.');
+      return;
+    }
     setBusy(true);
     try {
       await updateRoomSettings({
@@ -540,7 +503,12 @@ function RoomSettingsForm({
         dateStart: start,
         dateEnd: end,
       });
+      if (isHost) {
+        if (!pwOn && room.has_password) await setRoomPassword(session.token, null); // remove
+        else if (pwOn && pw.trim()) await setRoomPassword(session.token, pw.trim()); // set/change
+      }
       onSaved();
+      setPw('');
       toast.success('설정을 저장했어요.');
       setConfirming(false);
     } catch (e) {
@@ -551,34 +519,101 @@ function RoomSettingsForm({
   }
 
   return (
-    <section className="space-y-3 border-t border-border pt-4">
-      <h3 className="text-sm font-bold text-muted-foreground">방 설정</h3>
-      <div>
-        <Label>약속 이름</Label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label>시작일</Label>
-          <Input type="date" min={todayStr()} value={start} onChange={(e) => setStart(e.target.value)} />
-        </div>
-        <div>
-          <Label>종료일</Label>
-          <Input type="date" min={start} value={end} onChange={(e) => setEnd(e.target.value)} />
-        </div>
-      </div>
-      <Button
-        variant="outline"
-        className="w-full"
-        disabled={busy || !title.trim() || end < start}
-        onClick={() => {
-          // If narrowing the range would delete already-voted candidates, confirm first.
-          if (datesChanged && lost.length > 0) setConfirming(true);
-          else save();
-        }}
+    <section className="border-t border-border pt-4">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between"
       >
-        설정 저장
-      </Button>
+        <span className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground">
+          <Settings className="h-4 w-4" /> 방 설정
+        </span>
+        <ChevronDown
+          className={cn('h-4 w-4 text-muted-foreground transition', expanded && 'rotate-180')}
+        />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <Label>약속 이름</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>시작일</Label>
+              <Input type="date" min={todayStr()} value={start} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div>
+              <Label>종료일</Label>
+              <Input type="date" min={start} value={end} onChange={(e) => setEnd(e.target.value)} />
+            </div>
+          </div>
+
+          {isHost && (
+            <div className="space-y-2 rounded-2xl bg-muted/60 p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-semibold">
+                  <KeyRound className="h-4 w-4" /> 비밀번호로 방 보호
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={pwOn}
+                  onClick={() => setPwOn((v) => !v)}
+                  className={cn(
+                    'relative h-6 w-11 shrink-0 rounded-full transition',
+                    pwOn ? 'bg-primary' : 'bg-border',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all',
+                      pwOn ? 'left-[22px]' : 'left-0.5',
+                    )}
+                  />
+                </button>
+              </div>
+              {pwOn && (
+                <Input
+                  type="text"
+                  placeholder={room.has_password ? '새 비밀번호 (변경 시에만 입력)' : '비밀번호 입력'}
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  maxLength={64}
+                />
+              )}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={busy || !title.trim() || end < start}
+            onClick={() => {
+              // If narrowing the range would delete already-voted candidates, confirm first.
+              if (datesChanged && lost.length > 0) setConfirming(true);
+              else save();
+            }}
+          >
+            설정 저장
+          </Button>
+
+          {/* 참가자 관리 (관리자 전용) */}
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <h4 className="text-xs font-bold text-muted-foreground">참가자 관리 ({participants.length}명)</h4>
+            {participants.map((p) => (
+              <ParticipantRow
+                key={p.id}
+                p={p}
+                room={room}
+                session={session}
+                me={me}
+                onChanged={onParticipantsChanged}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <Dialog open={confirming} onClose={() => setConfirming(false)} title="기간을 바꿀까요?">
         <p className="text-sm text-muted-foreground">
@@ -607,6 +642,40 @@ function RoomSettingsForm({
         </div>
       </Dialog>
     </section>
+  );
+}
+
+function InviteDialog({
+  open,
+  onClose,
+  onKakao,
+  onCopy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onKakao: () => void;
+  onCopy: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} title="친구 초대하기">
+      <p className="mb-4 text-sm text-muted-foreground">링크로 친구를 초대하세요.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={onKakao}
+          className="flex flex-col items-center gap-2 rounded-2xl bg-[#FEE500] py-5 text-[#191919] transition active:scale-95"
+        >
+          <MessageCircle className="h-7 w-7" />
+          <span className="text-sm font-bold">카카오톡</span>
+        </button>
+        <button
+          onClick={onCopy}
+          className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card py-5 transition active:scale-95"
+        >
+          <Link2 className="h-7 w-7 text-primary" />
+          <span className="text-sm font-bold">링크 복사</span>
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -650,7 +719,7 @@ function FinalizeDialog({
               <div className="flex items-center justify-between">
                 <span className="font-semibold">
                   {dayjs(opt.date).format('M/D (ddd)')}
-                  {opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}` : ' · 하루종일'}
+                  {opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time)}` : ' · 하루종일'}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
@@ -666,7 +735,7 @@ function FinalizeDialog({
                 <VoterAvatars
                   supporters={opt.supporterIds.map((id) => participantsById.get(id)).filter(Boolean) as Participant[]}
                   explicitIds={opt.supporterIds}
-                  title={`${dayjs(opt.date).format('M/D (ddd)')}${opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time!)}` : ' · 하루종일'} · 투표자`}
+                  title={`${dayjs(opt.date).format('M/D (ddd)')}${opt.kind === 'candidate' ? ` · ${fmtRange(opt.start_time!, opt.end_time)}` : ' · 하루종일'} · 투표자`}
                 />
               )}
             </button>
@@ -683,29 +752,145 @@ function FinalizeDialog({
   );
 }
 
-function ResetPinDialog({
-  nickname,
-  onClose,
-  onSubmit,
+function ParticipationButton({
+  unavailable,
+  onToggle,
 }: {
-  nickname: string;
-  onClose: () => void;
-  onSubmit: (pin: string) => void;
+  unavailable: boolean;
+  onToggle: (next: boolean) => Promise<void>;
 }) {
-  const [pin, setPin] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (unavailable) {
+    return (
+      <Button
+        variant="outline"
+        className="w-full justify-start text-primary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await onToggle(false);
+          setBusy(false);
+        }}
+      >
+        <Ban className="h-5 w-5" /> 다시 참여하기
+      </Button>
+    );
+  }
   return (
-    <Dialog open onClose={onClose} title={`${nickname}님 PIN 초기화`}>
-      <p className="mb-4 text-sm text-muted-foreground">새 4자리 PIN을 설정해 전달하세요.</p>
-      <PinInput value={pin} onChange={setPin} autoFocus />
-      <div className="mt-5 flex gap-2">
-        <Button variant="secondary" className="flex-1" onClick={onClose}>
-          취소
-        </Button>
-        <Button className="flex-1" disabled={pin.length !== 4} onClick={() => onSubmit(pin)}>
-          초기화
-        </Button>
-      </div>
-    </Dialog>
+    <>
+      <Button variant="outline" className="w-full justify-start" onClick={() => setConfirming(true)}>
+        <Ban className="h-5 w-5" /> 이 약속 전체 불참
+      </Button>
+      <Dialog open={confirming} onClose={() => setConfirming(false)} title="전체 불참으로 표시할까요?">
+        <p className="text-sm text-muted-foreground">
+          이 약속의 내 투표와 하루종일/날짜 표시가 모두 취소돼요.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setConfirming(false)}>
+            취소
+          </Button>
+          <Button
+            variant="destructive"
+            className="flex-1"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await onToggle(true);
+              setBusy(false);
+              setConfirming(false);
+            }}
+          >
+            전체 불참
+          </Button>
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
+function LogoutButton({ onConfirm }: { onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="w-full justify-start text-muted-foreground"
+        onClick={() => setConfirming(true)}
+      >
+        <LogOut className="h-5 w-5" /> 로그아웃
+      </Button>
+      <Dialog open={confirming} onClose={() => setConfirming(false)} title="로그아웃할까요?">
+        <p className="text-sm text-muted-foreground">
+          보기 모드로 전환되고 홈으로 이동해요. 최근 약속 목록에는 그대로 남아 있어요.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setConfirming(false)}>
+            취소
+          </Button>
+          <Button className="flex-1" onClick={onConfirm}>
+            로그아웃
+          </Button>
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
+function ChangePinButton({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  function close() {
+    setOpen(false);
+    setOldPin('');
+    setNewPin('');
+  }
+
+  return (
+    <>
+      <Button variant="outline" className="w-full justify-start" onClick={() => setOpen(true)}>
+        <KeyRound className="h-5 w-5" /> 내 PIN 변경
+      </Button>
+      <Dialog open={open} onClose={close} title="내 PIN 변경">
+        <div className="space-y-4">
+          <div>
+            <Label>현재 PIN</Label>
+            <PinInput value={oldPin} onChange={setOldPin} autoFocus />
+          </div>
+          <div>
+            <Label>새 PIN</Label>
+            <PinInput value={newPin} onChange={setNewPin} />
+          </div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={close}>
+            취소
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={busy || oldPin.length !== 4 || newPin.length !== 4}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await changePin(token, oldPin, newPin);
+                close();
+                toast.success('PIN을 변경했어요.');
+              } catch (e) {
+                toast.error(friendlyError(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            변경
+          </Button>
+        </div>
+      </Dialog>
+    </>
   );
 }
 
