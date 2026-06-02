@@ -17,15 +17,15 @@ export function VoteMeta({
   tone?: 'primary' | 'amber';
 }) {
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
+    <div className="flex shrink-0 flex-col items-end gap-0.5">
       {isFinal && (
-        <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-white">
+        <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
           확정
         </span>
       )}
       <span
         className={cn(
-          'inline-flex items-baseline gap-0.5 rounded-full px-2.5 py-1 text-sm font-bold',
+          'inline-flex items-baseline gap-0.5 whitespace-nowrap rounded-full px-2 py-0.5 text-sm font-bold',
           tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary',
         )}
       >
@@ -33,7 +33,7 @@ export function VoteMeta({
         <span className="text-[10px] font-semibold opacity-80">표</span>
       </span>
       {unavailable > 0 && (
-        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600">
+        <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
           불참 {unavailable}
         </span>
       )}

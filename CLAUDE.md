@@ -616,11 +616,12 @@ src/
     holidays.ts           fetchYearHolidays() → reads from Supabase holidays table
     kakao.ts              shareRoom() and shareResult() via Kakao SDK
     queryClient.ts        TanStack Query client + query key factory (qk.*)
-    utils.ts              cn(), fmtRange(), sortSupporters()
+    utils.ts              cn(), fmtTime()/fmtRange() (12h, 2-digit hour), sortSupporters()
   store/
     session.ts            Zustand store: sessions keyed by roomId, persisted to
                           localStorage. Session shape: roomId, participantId, token,
                           nickname, color, role, roomTitle?, joinedAt?
+    recent.ts             Visited rooms (kept after logout) → HomePage "최근 약속"
   hooks/
     useRoomData.ts        Loads room + all related data + Realtime subscriptions
     useRoomActions.ts     All write actions: optimistic UI + login-gate
@@ -636,11 +637,16 @@ src/
                           finalized stars (multi-date); color dots; drag select
       CandidateListView.tsx  Flat ranked list view of all time candidates
       PromisingOptions.tsx   Leading options banner (top of room page)
-      DateSheet.tsx       Bottom sheet on date tap: candidates, AllDayRow, comments
-      TimeRangePicker.tsx Drag-to-select time (explicit drag mode toggle to avoid
-                          scroll hijacking) + dropdown fallback
-      VoterAvatars.tsx    Compact avatar cluster, tap → full nickname dialog
-      MembersSheet.tsx    참여 현황 sheet (누가 투표/불참/하루종일)
+      DateSheet.tsx       Bottom sheet on date tap: candidates, AllDayRow, comments.
+                          "시간 추가/수정" opens AddCandidate as a Dialog (wheel picker).
+      TimeWheelPicker.tsx Alarm-style scroll wheels (오전·오후/시/분, 1-min); optional
+                          end time toggle (replaced the old drag TimeRangePicker)
+      VoteMeta.tsx        Shared right-hand meta column: 확정 / 표수 / 불참, stacked
+                          and fixed-width so long times never collide with it
+      VoterAvatars.tsx    Avatar cluster → full nickname dialog; `full` mode makes the
+                          whole zone tappable
+      MembersSheet.tsx    참여 현황 sheet (누가 투표/불참/하루종일); voted-first sort,
+                          tap a member's time → jump to that date
       NotificationCenter.tsx  In-app notification panel
       RoomMenu.tsx        Side sheet menu: share, finalize, participants, settings.
                           Simplified post-finalization menu (result-share only).
@@ -766,7 +772,8 @@ All child tables cascade-delete from `rooms`.
   editor. Migration 0010 ends with this automatically.
 - **Applying schema changes:** add a new numbered file under `supabase/migrations/`
   and run it in the **Supabase SQL Editor** manually (no automated runner).
-  All migrations 0001–0010 are already applied to the live project.
+  Migrations 0001–0015 exist; 0011–0015 were added recently and must be run on the
+  live project (each ends with `notify pgrst, 'reload schema';`).
 - **Holiday API key:** registered at https://data.go.kr → 한국천문연구원 특일정보.
   The key is a hex string (no special chars, no URL encoding needed). If it stops
   working, check if the usage approval is still active in 마이페이지 → 활용신청.
@@ -931,3 +938,22 @@ URL flow is built.
   entry, no confirm) in both create and settings.
 - **Removed others' nickname/PIN editing**: rename + PIN-reset of other members are
   gone from `ParticipantRow` (kept role toggle / transfer / kick).
+
+### UX round 5 (this session, frontend only)
+
+- **Final time format** (`utils.fmtTime/fmtRange`): 12-hour, **2-digit hour, period
+  on both ends** — `오후 07:10 ~ 오후 07:11`, `오전 08:30 ~ 오후 12:00`; start-only
+  `오후 06:00`. (Superseded the earlier "시/분" and period-collapsing forms.)
+  Time text renders at `text-[13px] break-keep` so it stays on one line in the
+  normal case and wraps cleanly only in the extreme.
+- **Consistent vote-row meta** (`VoteMeta`): every voting row (DateSheet,
+  CandidateListView, PromisingOptions) puts 확정 / 표수 / 불참 in a fixed-width,
+  right-aligned, `shrink-0` column; the time sits in a `min-w-0 flex-1` column, so
+  **a long time can never overflow into the count**. Count pill is
+  `whitespace-nowrap` (no more "2"/"표" stacking).
+- **Wider voter tap zone** (`VoterAvatars` `full` mode): the whole muted avatar
+  strip is one big button that opens the names dialog (not just the icons), with a
+  "명단 ›" hint.
+- **Calendar holiday names removed** from cells (they were truncated/ugly); the red
+  date coloring stays, and the full holiday name still shows in the DateSheet title.
+  (This reverts the "holiday name in red" cell text added in round 3.)

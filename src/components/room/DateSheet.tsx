@@ -252,7 +252,7 @@ export function DateSheet({
                   disabled={readOnly}
                   onClick={() => actions.toggleVote(t.candidate.id, voted)}
                   className={cn(
-                    'flex w-full items-center gap-3 p-3 text-left transition',
+                    'flex w-full items-center gap-2.5 p-3 text-left transition',
                     !readOnly && 'active:scale-[0.99]',
                     voted && !isFinal && 'bg-primary/5',
                     readOnly && 'opacity-80',
@@ -268,7 +268,7 @@ export function DateSheet({
                   >
                     <Check className="h-5 w-5" />
                   </span>
-                  <span className="min-w-0 flex-1 break-keep text-sm font-bold leading-snug">
+                  <span className="min-w-0 flex-1 break-keep text-[13px] font-bold leading-snug">
                     {fmtRange(t.candidate.start_time, t.candidate.end_time)}
                   </span>
                   <VoteMeta total={t.total} unavailable={t.unavailableCount} isFinal={isFinal} />

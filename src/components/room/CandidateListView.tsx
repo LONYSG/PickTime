@@ -184,7 +184,7 @@ export function CandidateListView({
                 >
                   <Check className="h-5 w-5" />
                 </span>
-                <span className="min-w-0 flex-1 break-keep text-sm font-bold leading-snug">
+                <span className="min-w-0 flex-1 break-keep text-[13px] font-bold leading-snug">
                   {fmtRange(t.candidate.start_time, t.candidate.end_time)}
                 </span>
                 <VoteMeta total={t.total} unavailable={row.unavailable} isFinal={isFinal} />

@@ -59,7 +59,7 @@ export function PromisingOptions({
               key={o.id}
               onClick={() => onPick(o.date)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-2xl bg-white/15 p-3 text-left backdrop-blur-sm active:scale-[0.99]',
+                'flex w-full items-center gap-2.5 rounded-2xl bg-white/15 p-3 text-left backdrop-blur-sm active:scale-[0.99]',
                 (finalizedIds ? finalizedIds.includes(o.id) : o.id === finalizedId) && 'ring-2 ring-amber-300',
               )}
             >
@@ -68,7 +68,7 @@ export function PromisingOptions({
                 <span className="block text-[11px] opacity-80">{d.format('ddd')}</span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block break-keep text-sm font-semibold leading-snug">
+                <span className="block break-keep text-[13px] font-semibold leading-snug">
                   {o.kind === 'allday' ? (
                     <span className="inline-flex items-center gap-1">
                       <Sun className="h-3.5 w-3.5" /> 하루종일
@@ -88,7 +88,7 @@ export function PromisingOptions({
                 </span>
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1">
-                <span className="flex items-baseline gap-1 rounded-2xl bg-white/20 px-3 py-1.5">
+                <span className="flex items-baseline gap-1 whitespace-nowrap rounded-2xl bg-white/20 px-3 py-1.5">
                   <span className="text-xl font-extrabold leading-none">{o.total}</span>
                   <span className="text-[11px] opacity-80">표</span>
                 </span>
