@@ -17,18 +17,28 @@ export function sortSupporters(list: Participant[]): Participant[] {
   );
 }
 
-/** "18:00:00" -> "오후 6시", "18:30:00" -> "오후 6시 30분" */
-export function fmtTime(t: string): string {
+function timeParts(t: string) {
   const [h, m] = t.split(':').map(Number);
   const period = h < 12 || h === 24 ? '오전' : '오후';
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${period} ${h12}시` : `${period} ${h12}시 ${m}분`;
+  return { period, clock: `${h12}:${String(m).padStart(2, '0')}` };
+}
+
+/** "18:00:00" -> "오후 6:00" */
+export function fmtTime(t: string): string {
+  const { period, clock } = timeParts(t);
+  return `${period} ${clock}`;
 }
 
 /**
- * Format a candidate's time. With an end: "오후 3시 30분 ~ 오후 4시 30분".
- * Start only (no agreed end): just "오후 4시".
+ * Compact range. Same half-day collapses the period: "오후 6:00 ~ 8:30".
+ * Across noon it stays explicit: "오전 11:00 ~ 오후 1:00". Start only: "오후 6:00".
  */
 export function fmtRange(start: string, end?: string | null): string {
-  return end ? `${fmtTime(start)} ~ ${fmtTime(end)}` : fmtTime(start);
+  if (!end) return fmtTime(start);
+  const s = timeParts(start);
+  const e = timeParts(end);
+  return s.period === e.period
+    ? `${s.period} ${s.clock} ~ ${e.clock}`
+    : `${s.period} ${s.clock} ~ ${e.period} ${e.clock}`;
 }

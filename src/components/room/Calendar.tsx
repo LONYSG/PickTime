@@ -167,8 +167,7 @@ export function Calendar({
           const hasCandidates = (info?.candidateCount ?? 0) > 0;
           const isFinal = finalSet.has(ds);
           const isToday = ds === today;
-          const holidayName = isHoliday(ds);
-          const isHol = holidayName !== null;
+          const isHol = isHoliday(ds) !== null;
           const isSelected = multi && selected.has(ds);
           const dots = sortSupporters(
             (info?.supporterIds ?? [])
@@ -238,10 +237,6 @@ export function Calendar({
                       +{info.supporterIds.length - 4}
                     </span>
                   )}
-                </span>
-              ) : inRange && isHol ? (
-                <span className="max-w-full truncate px-0.5 text-[9px] leading-tight text-rose-500">
-                  {holidayName}
                 </span>
               ) : inRange && hasCandidates ? (
                 <span className="h-1.5 w-1.5 rounded-full border border-indigo-300" />
